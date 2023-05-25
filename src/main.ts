@@ -2,10 +2,10 @@ import express from 'express';
 /*import { DatabaseRepository } from './helpers/database_repository';
 import admin from './routes/admin';
 import api_scraper from './routes/api_scraper';
-import login from './routes/login';
-import scripts from './routes/scripts';
 */
 import base from './routes/base';
+import login from './routes/login';
+import sync from './routes/sync';
 const cors = require('cors');
 const bodyParser = require("body-parser");
 const router = express.Router();
@@ -19,17 +19,12 @@ app.use(bodyParser.json());
 
 // add router in the Express app.
 app.use("/", base);
-//app.use("/api", api_scraper);
-
-// Admin interface
-//app.use("/admin", admin);
 
 // Register & Login
-//app.use("/", login);
+app.use("/", login);
 
-// Scripts
-//app.use("/", scripts);
-
+// Sync
+app.use("/", sync);
 
 
 // Default to port 3000 but allow a PORT variable to be set
