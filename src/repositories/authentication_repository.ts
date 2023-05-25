@@ -72,7 +72,7 @@ export class AuthenticationRepository {
             `INSERT INTO ${Tables.UserClient}
             (clientid, userid, clientdetails, lastsync, syncing)
             VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (id)
+            ON CONFLICT (clientid)
             DO UPDATE 
             SET lastsync=$4, syncing=$5;
             `
@@ -86,7 +86,7 @@ export class AuthenticationRepository {
         const userToken = new UserToken();
         userToken.token = randomUUID();;
         userToken.refreshtoken = randomUUID();;
-        userToken.lastrefresh = new Date();
+        userToken.lastrefresh = new Date().getTime();
         userToken.clientid = clientid;
         await this.updateToken(realm, userToken);
         return userToken;
