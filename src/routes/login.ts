@@ -51,7 +51,7 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
         const realm = req.params.realm;
         const { clientId } = req.body;
         // Check that the clientId
-        const userClient = await AuthenticationRepository.getInstance().getUserClient(realm, clientId);
+        const userClient = await UserRepository.getInstance().getUserClient(realm, clientId);
         if (!userClient || userClient.userid !== user.id) {
             res.status(403).send(new ApiResult(403, "Invalid clientid for current username and password"));
             return;

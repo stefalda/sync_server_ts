@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Tables, UserClient, UserToken } from "../models/db/models";
+import { Tables, UserToken } from "../models/db/models";
 import { DatabaseRepository } from "./database_repository";
 
 export class AuthenticationRepository {
@@ -57,30 +57,7 @@ export class AuthenticationRepository {
 
     }
 
-    async getUserClient(realm: string, clientId: string): Promise<UserClient> {
-        const db = await this.getDB();
-        return await db.query(
-            `SELECT  clientid, userid, clientdetails, lastsync, syncing FROM ${Tables.UserClient}
-             WHERE clientid = $1`
-            , [clientId], { realm: realm, singleResult: true });
 
-    }
-
-    async setUserClient(realm: string, userClient: UserClient) {
-        const db = await this.getDB();
-        return await db.query(
-            `INSERT INTO ${Tables.UserClient}
-            (clientid, userid, clientdetails, lastsync, syncing)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (clientid)
-            DO UPDATE 
-            SET lastsync=$4, syncing=$5;
-            `
-            , [userClient.clientid, userClient.userid, userClient.clientdetails, userClient.lastsync, userClient.syncing],
-            { realm: realm, }
-        );
-
-    }
 
     async generateToken(realm: string, clientid: string): Promise<UserToken> {
         const userToken = new UserToken();
