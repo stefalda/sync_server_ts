@@ -88,7 +88,7 @@ function tokenFromUserToken(userToken: UserToken) {
         access_token: userToken.token,
         refresh_token: userToken.refreshtoken,
         expires_in: 86400, // 24h
-        expires_on: new Date(userToken.lastrefresh!.getTime() + 60 * 60 * 24 * 1000)
+        expires_on: new Date(userToken.lastrefresh! + 60 * 60 * 24 * 1000)
     };
 }
 

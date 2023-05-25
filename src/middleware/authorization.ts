@@ -7,6 +7,9 @@ import { UserRepository } from '../repositories/user_repository';
 
 /**
  * Check Bearer Token after logging in 
+ * 
+ * At the end it injects a userToken in the request object
+ * 
  * @param req 
  * @param res 
  * @param next 
@@ -33,7 +36,7 @@ export const checkToken = async (req: Request, res: Response, next: any) => {
         }
         // Token expired
         const now = new Date();
-        var differenceInHours = Math.abs(now.getTime() - userToken.lastrefresh!.getTime()) / 36e5; //60*60*1000
+        var differenceInHours = Math.abs(now.getTime() - userToken.lastrefresh!) / 36e5; //60*60*1000
         if (differenceInHours > 24) {
             return res.status(400).json(new ApiResult(400, "Token has expired"));
         }
@@ -48,6 +51,9 @@ export const checkToken = async (req: Request, res: Response, next: any) => {
 
 /**
  * Check the Simple Authentication when performing Login
+ * 
+ * At the end it injects a user in the request object
+ * 
  * @param req 
  * @param res 
  * @param next 

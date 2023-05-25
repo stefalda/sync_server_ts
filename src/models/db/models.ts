@@ -10,7 +10,7 @@ export class UserToken {
     clientid?: string;
     token?: string;
     refreshtoken?: string;
-    lastrefresh?: Date;
+    lastrefresh?: number;
 }
 
 export class User {
@@ -26,8 +26,8 @@ export class UserClient {
     clientid?: string;
     userid?: number;
     clientdetails?: ClientDetails;
-    lastsync?: Date;
-    syncing?: Date;
+    lastsync?: number;
+    syncing?: number | null;
 }
 
 export interface Data {
