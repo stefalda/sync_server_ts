@@ -1,7 +1,7 @@
 import { SyncData, SyncDataPullResponse, SyncDataPushResponse, SyncDataRequest } from "../models/api/sync_data";
 import { Tables, UserClient, UserToken } from "../models/db/models";
-import { AuthenticationRepository } from "./authentication_repository";
 import { DatabaseRepository } from "./database_repository";
+import { UserRepository } from "./user_repository";
 
 export class SyncRepository {
 
@@ -33,7 +33,7 @@ export class SyncRepository {
     async pull(realm: any, syncDataRequest: SyncDataRequest, userToken: UserToken): Promise<SyncDataPullResponse> {
         // Ottieni lo userClient
         const userClient =
-            await AuthenticationRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
+            await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
         if (!userClient) {
             throw Error("Client id not found!");
         }
@@ -43,7 +43,7 @@ export class SyncRepository {
         }
         // Segna la sincronizzazione come attiva
         userClient.syncing = new Date().getTime();
-        await AuthenticationRepository.getInstance().setUserClient(realm, userClient);
+        await UserRepository.getInstance().setUserClient(realm, userClient);
         const syncDataPullResponse = new SyncDataPullResponse(userClient.clientid!);
         try {
             // Cicla sui cambiamenti presenti sul server
@@ -83,7 +83,7 @@ export class SyncRepository {
             // Reset syncing date
             if (userClient) {
                 userClient.syncing = null;
-                await AuthenticationRepository.getInstance().setUserClient(realm, userClient);
+                await UserRepository.getInstance().setUserClient(realm, userClient);
             }
             throw ex;
         }
@@ -93,7 +93,7 @@ export class SyncRepository {
     async push(realm: any, syncDataRequest: SyncDataRequest, userToken: UserToken): Promise<SyncDataPushResponse> {
         // Ottieni lo userClient
         const userClient =
-            await AuthenticationRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
+            await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
         if (!userClient) {
             throw Error("Client id not found!");
         }
@@ -118,14 +118,14 @@ export class SyncRepository {
             // Update Client Last Sync Date and delete syncing date
             userClient.lastsync = new Date().getTime();
             userClient.syncing = null;
-            await AuthenticationRepository.getInstance().setUserClient(realm, userClient);
+            await UserRepository.getInstance().setUserClient(realm, userClient);
             return new SyncDataPushResponse(userClient.lastsync!);
         }
         catch (ex) {
             // Reset syncing date
             if (userClient) {
                 userClient.syncing = null;
-                await AuthenticationRepository.getInstance().setUserClient(realm, userClient);
+                await UserRepository.getInstance().setUserClient(realm, userClient);
             }
             throw ex;
         }
@@ -163,7 +163,7 @@ export class SyncRepository {
         var differenceInMinutes = Math.abs(now.getTime() - userClient.syncing!) / 1000 / 60;
         if (differenceInMinutes > 5) {
             userClient.syncing = null;
-            AuthenticationRepository.getInstance().setUserClient(realm, userClient);
+            UserRepository.getInstance().setUserClient(realm, userClient);
             return false;
         }
         return true;

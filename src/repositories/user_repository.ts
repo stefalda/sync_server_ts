@@ -3,7 +3,6 @@ import { encryptPassword } from "../helpers/utils";
 import { ApiResult } from "../models/api/api_result";
 import { Registration, RegistrationResult } from "../models/api/registration";
 import { ClientDetails, Tables, User, UserClient, UserToken } from "../models/db/models";
-import { AuthenticationRepository } from "./authentication_repository";
 import { DatabaseRepository } from "./database_repository";
 
 export class UserRepository {
@@ -81,7 +80,7 @@ export class UserRepository {
             return new ApiResult(500, "The email is not registered, try to Register as a new user...");
         }
         // Check if the clientId is already registered
-        if (await AuthenticationRepository.getInstance().getUserClient(realm, registrationData.clientId) != null) {
+        if (await this.getUserClient(realm, registrationData.clientId) != null) {
             return new ApiResult(500, "The clentid is already registered, please use another one.");
         }
 
@@ -160,7 +159,7 @@ export class UserRepository {
             uc.clientid = registrationData.clientId;
             uc.clientdetails = JSON.parse(registrationData.clientDescription) as ClientDetails;
             uc.userid = userid;
-            await AuthenticationRepository.getInstance().setUserClient(realm, uc);
+            await this.setUserClient(realm, uc);
             return new ApiResult(200, "OK");
         } catch (error) {
             throw (error);
@@ -204,5 +203,30 @@ export class UserRepository {
         } catch (error) {
             throw (error);
         }
+    }
+
+    async getUserClient(realm: string, clientId: string): Promise<UserClient> {
+        const db = await this.getDB();
+        return await db.query(
+            `SELECT  clientid, userid, clientdetails, lastsync, syncing FROM ${Tables.UserClient}
+             WHERE clientid = $1`
+            , [clientId], { realm: realm, singleResult: true });
+
+    }
+
+    async setUserClient(realm: string, userClient: UserClient) {
+        const db = await this.getDB();
+        return await db.query(
+            `INSERT INTO ${Tables.UserClient}
+            (clientid, userid, clientdetails, lastsync, syncing)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (clientid)
+            DO UPDATE 
+            SET lastsync=$4, syncing=$5;
+            `
+            , [userClient.clientid, userClient.userid, userClient.clientdetails, userClient.lastsync, userClient.syncing],
+            { realm: realm, }
+        );
+
     }
 }
