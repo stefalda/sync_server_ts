@@ -47,7 +47,7 @@ export class SyncRepository {
         const syncDataPullResponse = new SyncDataPullResponse(userClient.clientid!);
         try {
             // Cicla sui cambiamenti presenti sul server
-            const serverChanges = await this.getServerChanges(realm, userClient.userid!, userClient.lastsync!) || [];
+            const serverChanges = await this.getServerChanges(realm, userClient.userid!, syncDataRequest.lastSync) || [];
             // Confronta i cambiamenti presenti sul client con quelli del server
             // per capire se alcuni sono sorpassati e non vanno acquisiti (e viceversa)
             for (let client of syncDataRequest.changes) {
@@ -72,11 +72,12 @@ export class SyncRepository {
             // a meno che si tratti di una cancellazione
             for (let serverChange of serverChanges) {
                 if (serverChange.operation != "D") {
-                    serverChange.rowData = JSON.parse(await this.getRowDataValue(realm, serverChange.rowguid));
+                    const data = await this.getRowDataValue(realm, serverChange.rowguid);
+                    serverChange.rowData = data['json'];
                 }
             }
             // Aggiungi a syncDetails le modifiche presenti sul server e da applicare sul client
-            syncDataPullResponse.data.concat(serverChanges);
+            syncDataPullResponse.data = serverChanges;
             return syncDataPullResponse;
         }
         catch (ex) {
@@ -172,9 +173,9 @@ export class SyncRepository {
     /// Get changes from DB (required clientid, ???)
     private async getServerChanges(realm: string, userId: number, lastSync: number): Promise<Array<SyncData>> {
         const sql = `
-            SELECT userid, id,  rowguid, operation, tablename,  clientdate, serverdate , clientid
-            FROM ${Tables.SyncData} WHERE ID IN (
-                SELECT MAX(id) FROM ${Tables.SyncData} WHERE userid=$1 AND serverdate > $2  GROUP BY rowguid
+            SELECT userid, id,  rowguid, operation, tablename,  clientdate, serverdate, clientid
+            FROM ${Tables.SyncData} WHERE id IN (
+            SELECT MAX(id) FROM ${Tables.SyncData} WHERE userid=$1 AND serverdate > $2  GROUP BY rowguid
             )`;
         return (await this.getDB()).query(sql, [userId, lastSync], { realm });
     }

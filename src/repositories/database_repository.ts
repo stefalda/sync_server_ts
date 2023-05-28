@@ -11,7 +11,14 @@ export class DatabaseRepository {
 
     private static instance: DatabaseRepository;
 
-    private constructor() { }
+    private constructor() {
+        // Number as treated as string, so force int8 to be parsed with parseInt
+        // https://github.com/brianc/node-pg-types
+        var types = require('pg').types
+        types.setTypeParser(20, (val: string) =>
+            parseInt(val, 10)
+        );
+    }
 
     public static getInstance(): DatabaseRepository {
         if (!DatabaseRepository.instance) {
@@ -39,8 +46,10 @@ export class DatabaseRepository {
             const res = await client.query(sql, params);
             if (res.rowCount == 0) return null;
             if (options?.singleResult == true) {
+                // console.log(JSON.stringify(res.rows[0]));
                 return res.rows[0];
             }
+
             return res.rows;
         } catch (err: any) {
             console.log(err.stack)
