@@ -12,6 +12,7 @@ import { UserRepository } from '../repositories/user_repository';
 //import { secret } from './../middleware/verifyToken';
 
 
+
 const router = Router();
 
 //router.use(databaseMiddleware);
@@ -49,15 +50,15 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
     try {
         const user: User = (req as any).user;
         const realm = req.params.realm;
-        const { clientId } = req.body;
+        const { clientid } = req.body;
         // Check that the clientId
-        const userClient = await UserRepository.getInstance().getUserClient(realm, clientId);
+        const userClient = await UserRepository.getInstance().getUserClient(realm, clientid);
         if (!userClient || userClient.userid !== user.id) {
             res.status(403).send(new ApiResult(403, "Invalid clientid for current username and password"));
             return;
         }
         // Register a new Token
-        const userToken = await AuthenticationRepository.getInstance().generateToken(realm, clientId);
+        const userToken = await AuthenticationRepository.getInstance().generateToken(realm, clientid);
         res.json(tokenFromUserToken(userToken));
     } catch (err) {
         res.status(500).send({ error: 'Error registering user: ' + err });
@@ -88,7 +89,7 @@ function tokenFromUserToken(userToken: UserToken) {
         access_token: userToken.token,
         refresh_token: userToken.refreshtoken,
         expires_in: 86400, // 24h
-        expires_on: new Date(userToken.lastrefresh! + 60 * 60 * 24 * 1000)
+        expires_on: new Date(userToken.lastrefresh! + 60 * 60 * 24 * 1000).getTime()
     };
 }
 
