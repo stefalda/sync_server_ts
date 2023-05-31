@@ -1,0 +1,11 @@
+{
+    "server": {
+        "port": 3000
+    },
+    "db": {
+        "realms": {
+            "memento": "postgresql://stefano:VtS4JGVf_1yB8CJ9V6lvHg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/memento_server?sslmode=verify-full",
+            "default": "postgresql://stefano:VtS4JGVf_1yB8CJ9V6lvHg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/sync_server?sslmode=verify-full"
+        }
+    }
+}

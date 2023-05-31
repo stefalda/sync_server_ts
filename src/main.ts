@@ -1,4 +1,6 @@
 import express from 'express';
+import * as configJson from '../config.json';
+
 /*import { DatabaseRepository } from './helpers/database_repository';
 import admin from './routes/admin';
 import api_scraper from './routes/api_scraper';
@@ -8,10 +10,11 @@ import login from './routes/login';
 import sync from './routes/sync';
 const cors = require('cors');
 const bodyParser = require("body-parser");
-const router = express.Router();
 const app = express();
 app.use(cors());
-
+// Accept big payload
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb' }));
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
@@ -29,7 +32,7 @@ app.use("/", sync);
 
 // Default to port 3000 but allow a PORT variable to be set
 // es. PORT=8000 npm run serve
-var port = process.env.PORT || 3000;
+var port = configJson.server.port || process.env.PORT || 3000;
 
 
 app.listen(port, function () {
