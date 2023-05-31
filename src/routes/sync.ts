@@ -20,7 +20,7 @@ router.post('/pull/:realm', checkToken, async (req: any, res) => {
         const result = await SyncRepository.getInstance().pull(req.params.realm, syncData, userToken);
         res.json(result);
     } catch (err) {
-        res.status(500).send({ error: 'Error pulling data: ' + err });
+        res.status(500).send({ message: (err as Error).message });
     }
 });
 
@@ -31,7 +31,7 @@ router.post('/push/:realm', checkToken, async (req: any, res) => {
         const result = await SyncRepository.getInstance().push(req.params.realm, syncData, userToken);
         res.json(result);
     } catch (err) {
-        res.status(500).send({ error: 'Error pushing data: ' + err });
+        res.status(500).send({ message: (err as Error).message });
     }
 });
 

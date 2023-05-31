@@ -39,7 +39,7 @@ export class SyncRepository {
         }
         // Verifica che non ci sia un'altra sincronizzazione in corso per l'utente
         if (await this.isAlreadySyncing(realm, userClient)) {
-            throw Error("The user is already syncing elsewhere");
+            throw Error("The user is already syncing from this client");
         }
         // Segna la sincronizzazione come attiva
         userClient.syncing = new Date().getTime();
@@ -162,7 +162,7 @@ export class SyncRepository {
         // Verifica se la sincronizzazione dura da più di 5', nel caso annullala
         const now = new Date();
         var differenceInMinutes = Math.abs(now.getTime() - userClient.syncing!) / 1000 / 60;
-        if (differenceInMinutes > 5) {
+        if (differenceInMinutes > 2) {
             userClient.syncing = null;
             UserRepository.getInstance().setUserClient(realm, userClient);
             return false;
