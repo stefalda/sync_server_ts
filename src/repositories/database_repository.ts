@@ -1,15 +1,26 @@
 
 //const { Pool } = require('pg')
 import { Pool } from 'pg';
+import * as configJson from '../../config.json';
 
-const connectionString = 'postgresql://stefano:VtS4JGVf_1yB8CJ9V6lvHg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/sync_server?sslmode=verify-full'
 
 export class DatabaseRepository {
-    private pool = new Pool({
+    private pools = new Map<String, Pool>;
+
+    /*private pool = new Pool({
         connectionString,
     });
-
+    */
     private static instance: DatabaseRepository;
+
+    private getPool(realm: string): Pool {
+        let pool = this.pools.get(realm.toLowerCase());
+        if (!pool) {
+            return this.pools.get("default")!;
+        }
+        return pool;
+    }
+
 
     private constructor() {
         // Number as treated as string, so force int8 to be parsed with parseInt
@@ -18,6 +29,11 @@ export class DatabaseRepository {
         types.setTypeParser(20, (val: string) =>
             parseInt(val, 10)
         );
+        // Start pools
+        for (let realm in configJson.db.realms) {
+            const connectionString = (configJson.db.realms as any)[realm];
+            this.pools.set(realm, new Pool({ connectionString }));
+        }
     }
 
     public static getInstance(): DatabaseRepository {
@@ -40,7 +56,7 @@ export class DatabaseRepository {
      * @returns 
      */
     async query(sql: string, params: Array<any>, options: { realm: string, singleResult?: boolean }): Promise<any> {
-        const client = await this.pool.connect();
+        const client = await this.getPool(options.realm).connect();
 
         try {
             const res = await client.query(sql, params);
