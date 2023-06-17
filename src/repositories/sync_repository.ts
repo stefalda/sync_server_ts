@@ -109,7 +109,7 @@ export class SyncRepository {
                 // Aggiorna i dati a partire da quanto contenuto nel campo data
                 //print(
                 //    "Table:${clientChange.tablename} Operation:${clientChange.operation} Key:${clientChange.rowguid}");
-                await this.processData(realm, clientChange, userClient.userid!);
+                await this.processData(realm, clientChange);
                 // Inserisci la riga sulla tabella SyncData del server aggiungendo la data
                 //it.rowguid = UUID.fromString(it.rowguid)
                 clientChange.serverdate = new Date().getTime();
@@ -171,7 +171,7 @@ export class SyncRepository {
     }
 
     /// Get changes from DB (required clientid, ???)
-    private async getServerChanges(realm: string, userId: number, lastSync: number): Promise<Array<SyncData>> {
+    private async getServerChanges(realm: string, userId: string, lastSync: number): Promise<Array<SyncData>> {
         const sql = `
             SELECT userid, id,  rowguid, operation, tablename,  clientdate, serverdate, clientid
             FROM ${Tables.SyncData} WHERE id IN (
@@ -188,7 +188,7 @@ export class SyncRepository {
 
 
     /// Provvedi alle operazioni di inserimento, aggiornamento e cancellazione sulla tabella indicata
-    private async processData(realm: any, syncData: SyncData, userId: number): Promise<void> {
+    private async processData(realm: any, syncData: SyncData): Promise<void> {
         // Read the current RowData
         const jsonData = await this.getRowDataValue(realm, syncData.rowguid);
         // Update/Insert the json data
