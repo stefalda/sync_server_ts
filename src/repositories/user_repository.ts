@@ -1,11 +1,14 @@
 import { randomUUID } from "crypto";
+import * as configJson from '../../config.json';
+import { sendPin } from "../helpers/send_email";
 import { encryptPassword } from "../helpers/utils";
 import { ApiResult } from "../models/api/api_result";
-import { Registration, RegistrationResult } from "../models/api/registration";
-import { ClientDetails, Tables, User, UserClient, UserToken } from "../models/db/models";
+import { PasswordChangeData, RegistrationData, RegistrationResult } from "../models/api/registration";
+import { ClientDetails, Tables, User, UserClient, UserPin } from "../models/db/models";
 import { DatabaseRepository } from "./database_repository";
 
 export class UserRepository {
+
 
     private static instance: UserRepository;
 
@@ -33,14 +36,15 @@ export class UserRepository {
      * @param user 
      * @returns 
      */
-    async registerUser(realm: string, user: User): Promise<number> {
+    async registerUser(realm: string, user: User): Promise<string> {
         const db = await this.getDB();
+        user.id = randomUUID();//.replaceAll("-", "");
         const sql = `INSERT INTO ${Tables.User}
-                    ("name", email, "password", salt)
-                    VALUES( $1, $2, $3, $4) RETURNING id;`;
-        const rows = await db.query(sql,
-            [user.name, user.email, user.password, user.salt], { realm });
-        return rows[0].id;
+                    (id, name, email, password, salt, language)
+                    VALUES( $1, $2, $3, $4, $5, $6)`;
+        await db.query(sql,
+            [user.id, user.name, user.email, user.password, user.salt, user.language], { realm });
+        return user.id;
     }
 
     /**
@@ -51,15 +55,25 @@ export class UserRepository {
      * @returns 
      */
     async getUser(realm: string, email: string, password: string): Promise<User | null> {
-        const db = await this.getDB();
-        const sql = `SELECT id, name, email, password, salt FROM ${Tables.User} WHERE 
-                    email = $1`;
-        const user = await db.query(sql, [email], { realm, singleResult: true });
+        const user = await this.getUserFromDB(realm, email);
         if (!user) return null;
-        if (user.password === encryptPassword(password, user.salt)) {
+        if (user.password === encryptPassword(password, user.salt!)) {
             return user as User;
         }
         return null;
+    }
+
+    /**
+     * Return the user from the DB by email
+     * @param realm 
+     * @param email 
+     * @returns 
+     */
+    private async getUserFromDB(realm: string, email: string): Promise<User | null> {
+        const db = await this.getDB();
+        const sql = `SELECT id, name, email, password, salt, language FROM ${Tables.User} WHERE 
+                        email = $1`;
+        return await db.query(sql, [email], { realm, singleResult: true });
     }
 
     /**
@@ -69,7 +83,7 @@ export class UserRepository {
     * @param registrationData 
     * @returns 
     */
-    async register(realm: string, registrationData: Registration): Promise<ApiResult | RegistrationResult> {
+    async register(realm: string, registrationData: RegistrationData): Promise<ApiResult | RegistrationResult> {
         const emailAlreadyRegistered = await this.isEmailAlreadyRegistered(realm, registrationData.email);
         // New registration but email is already registered
         if (emailAlreadyRegistered && registrationData.newRegistration) {
@@ -100,6 +114,7 @@ export class UserRepository {
             user.email = registrationData.email;
             user.salt = randomUUID();
             user.password = encryptPassword(registrationData.password, user.salt);
+            user.language = registrationData.language;
             user.id = await UserRepository.getInstance().registerUser(realm, user);
         }
 
@@ -115,7 +130,7 @@ export class UserRepository {
     * @param registrationData 
     * @returns 
     */
-    async unregister(realm: string, registrationData: Registration, userToken: UserToken): Promise<ApiResult> {
+    async unregister(realm: string, registrationData: RegistrationData): Promise<ApiResult> {
         // Check username and password
         const user = await this.getUser(realm, registrationData.email, registrationData.password);
         if (!user) {
@@ -153,7 +168,7 @@ export class UserRepository {
    * @param registrationData 
    * @returns 
    */
-    private async registerClient(realm: string, registrationData: Registration, userid: number): Promise<ApiResult> {
+    private async registerClient(realm: string, registrationData: RegistrationData, userid: string): Promise<ApiResult> {
         try {
             const uc: UserClient = new UserClient();
             uc.clientid = registrationData.clientId;
@@ -168,33 +183,38 @@ export class UserRepository {
 
 
     /**
-   * Register a new user and client
+   * Unregister a user client
+   * Delete from the userTokens and from the userClients tables
    * @param realm 
    * @param registrationData 
    * @returns 
    */
-    private async unregisterClient(realm: string, userid: number, clientId: string): Promise<void> {
+    private async unregisterClient(realm: string, userid: string, clientId: string): Promise<void> {
         try {
             const db = await this.getDB();
-            const sql = `DELETE FROM ${Tables.UserClient} WHERE userid = $1 AND clientid = $2`;
-            await db.query(sql, [userid, clientId], { realm });
+            const sqlToken = `DELETE FROM ${Tables.UserToken}  WHERE clientid = $1`;
+            await db.query(sqlToken, [clientId], { realm });
+
+            const sqlClient = `DELETE FROM ${Tables.UserClient} WHERE userid = $1 AND clientid = $2`;
+            await db.query(sqlClient, [userid, clientId], { realm });
         } catch (error) {
             throw (error);
         }
     }
 
     /**
- * Register a new user and client
- * @param realm 
- * @param registrationData 
- * @returns 
- */
-    private async deleteUserData(realm: string, userid: number): Promise<void> {
+     * Delete ALL USER data
+     * @param realm 
+     * @param registrationData 
+     * @returns 
+     */
+    private async deleteUserData(realm: string, userid: string): Promise<void> {
         try {
             const db = await this.getDB();
             const sql = [`DELETE FROM ${Tables.Data} WHERE rowguid in 
                     (SELECT DISTINCT rowguid FROM  ${Tables.SyncData}  WHERE userid=$1);`,
             `DELETE FROM  ${Tables.SyncData}  WHERE userid=$1;`,
+            `DELETE FROM  ${Tables.UserToken}  WHERE clientid IN (SELECT clientid FROM ${Tables.UserClient} WHERE userid = $1);`,
             `DELETE FROM ${Tables.UserClient} WHERE userid = $1;`,
             `DELETE FROM ${Tables.User} WHERE id =$1;`];
             for (let s of sql) {
@@ -228,5 +248,79 @@ export class UserRepository {
             { realm: realm, }
         );
 
+    }
+
+    async changePassword(realm: any, registrationData: PasswordChangeData): Promise<boolean> {
+        // Check if the PIN is correct
+        const db = await this.getDB();
+        if (!registrationData.password) {
+            throw "New password is missing!";
+        }
+        const user = await this.getUserFromDB(realm, registrationData.email);
+        if (user == null) {
+            throw "User not found!";
+        }
+        // Get the PIN from the DB
+        const sql1 = `SELECT pin, created FROM ${Tables.UserPin} WHERE userid = $1`;
+        const userPin: UserPin = await db.query(sql1, [user.id], { realm, singleResult: true });
+
+        if (!userPin || userPin.pin !== registrationData.pin) {
+            return false;
+        }
+        const now = new Date();
+        var differenceInMinutes = Math.abs(now.getTime() - userPin.created!) / 60000; //60*1000
+        if (differenceInMinutes > 15) {
+            // The PIN is expired, delete...
+            await this.deletePin(realm, db, user.id!);
+            return false;
+        }
+
+        // Update the password in the DB
+        user.password = encryptPassword(registrationData.password, user.salt!);
+        const sql3 = `UPDATE ${Tables.User} SET password = $1 WHERE id = $2`;
+        await db.query(sql3, [user.password, user.id], { realm });
+
+        // Delete the PIN
+        await this.deletePin(realm, db, user.id!);
+
+        // Revoke all the accessToken related to this user
+        const sql4 = `DELETE from ${Tables.UserToken} WHERE 
+            clientid in (select clientid  from ${Tables.UserClient} where  userid = $1)`;
+        await db.query(sql4, [user.id], { realm });
+
+        return true;
+    }
+
+    private async deletePin(realm: string, db: DatabaseRepository, userid: string): Promise<void> {
+        // Delete the PIN from the DB
+        const sql2 = `DELETE FROM ${Tables.UserPin} WHERE userid = $1`;
+        await db.query(sql2, [userid], { realm });
+
+    }
+
+    async generatePin(realm: string, email: string): Promise<void> {
+        const db = await this.getDB();
+        // Get the userId
+        const user: User | null = await this.getUserFromDB(realm, email);
+        if (!user) {
+            throw "User not found!";
+        }
+        // Delete the PIN
+        const sql2 = `DELETE FROM ${Tables.UserPin} WHERE userid = $1`;
+        await db.query(sql2, [user.id], { realm });
+
+        // Insert the PIN
+        const pin = this.randomFixInteger(6).toString();
+        const create = (new Date()).getTime();
+        const sql3 = `INSERT INTO ${Tables.UserPin} (userid, pin, created) VALUES ($1, $2, $3)`;
+        await db.query(sql3, [user.id, pin, create], { realm });
+        // Extract the App Name from the config json file
+        const appName = (configJson.email.apps as any)[realm.toLowerCase()];
+        // Send the email
+        await sendPin(user.name || email, email, appName, pin, user.language || "en");
+    }
+
+    private randomFixInteger(length: number) {
+        return Math.floor(Math.pow(10, length - 1) + Math.random() * (Math.pow(10, length) - Math.pow(10, length - 1) - 1));
     }
 }
