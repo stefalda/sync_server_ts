@@ -109,7 +109,7 @@ GRANT ALL ON TABLE public."data" TO stefano WITH GRANT OPTION;
 
 CREATE TABLE public.sync_data (
 	id INT8 NOT NULL DEFAULT unique_rowid(),
-	userid INT8 NOT NULL,
+	userid UUID NOT NULL,
 	clientid UUID NOT NULL,
 	tablename VARCHAR(255) NOT NULL,
 	rowguid UUID NOT NULL,
@@ -137,7 +137,7 @@ GRANT ALL ON TABLE public.sync_data TO stefano WITH GRANT OPTION;
 CREATE TABLE public.user_clients (
 	id INT8 NOT NULL DEFAULT unique_rowid(),
 	clientid UUID NOT NULL,
-	userid INT8 NOT NULL,
+	userid UUID NOT NULL,
 	lastsync INT8 NULL,
 	syncing INT8 NULL,
 	clientdetails JSONB NULL,
@@ -191,6 +191,7 @@ CREATE TABLE public.users (
 	email VARCHAR(255) NOT NULL,
 	password VARCHAR(255) NOT NULL,
 	salt VARCHAR(255) NOT NULL,
+	language CHAR(2) NULL,
 	CONSTRAINT users_pkey PRIMARY KEY (id ASC)
 );
 
@@ -204,6 +205,17 @@ GRANT ALL ON TABLE public."users" TO "admin" WITH GRANT OPTION;
 GRANT ALL ON TABLE public."users" TO stefano WITH GRANT OPTION;
 
 
+CREATE TABLE public.users_pin (
+	userid UUID NOT NULL,
+	pin varchar(10) NOT NULL,
+	created int8 NOT NULL,
+	CONSTRAINT users_pin_pk PRIMARY KEY (userid)
+);
+
+ALTER TABLE public."users_pin" OWNER TO stefano;
+GRANT ALL ON TABLE public."users_pin" TO root WITH GRANT OPTION;
+GRANT ALL ON TABLE public."users_pin" TO "admin" WITH GRANT OPTION;
+GRANT ALL ON TABLE public."users_pin" TO stefano WITH GRANT OPTION;
 
 
 -- Permissions

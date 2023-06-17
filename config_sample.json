@@ -7,5 +7,17 @@
             "memento": "postgresql://stefano:VtS4JGVf_1yB8CJ9V6lvHg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/memento_server?sslmode=verify-full",
             "default": "postgresql://stefano:VtS4JGVf_1yB8CJ9V6lvHg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/sync_server?sslmode=verify-full"
         }
+    },
+    "email": {
+        "from": "Nowhere",
+        "fromEmail": "nowhere@land.com",
+        "smtp": "smtp.server.com",
+        "port": "2587",
+        "username": "username",
+        "password": "password",
+        "apps": {
+            "memento": "Memento",
+            "default": "Babisoft App"
+        }
     }
 }

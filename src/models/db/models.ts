@@ -4,6 +4,8 @@ export class Tables {
     static UserClient = "user_clients";
     static Data = "data";
     static SyncData = "sync_data";
+    static UserPin = "users_pin";
+
 }
 
 export class UserToken {
@@ -14,20 +16,27 @@ export class UserToken {
 }
 
 export class User {
-    id?: number;
+    id?: string;
     name?: string;
     email?: string;
     password?: string;
     salt?: string;
+    language?: string;
 }
 
 export class UserClient {
     id?: number;
     clientid?: string;
-    userid?: number;
+    userid?: string;
     clientdetails?: ClientDetails;
     lastsync?: number;
     syncing?: number | null;
+}
+
+export class UserPin {
+    userid?: string;
+    pin?: string;
+    created?: number;
 }
 
 export interface Data {

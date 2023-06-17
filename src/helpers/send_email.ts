@@ -1,0 +1,25 @@
+import { sendMail } from "./email_client";
+const path = require('node:path');
+
+type ConfirmEmailPayload = {
+    name: string;
+    app: string;
+    pin: string;
+};
+
+export async function sendPin(name: string, email: string, app: string, pin: string, language: string) {
+    email = "stefano.falda@gmail.com";//FORCED
+    const templateData: ConfirmEmailPayload = {
+        name,
+        app,
+        pin
+    };
+    const template = (language.toLowerCase()) == "it" ? "change_password_it" : "change_password";
+    await sendMail<ConfirmEmailPayload>({
+        subject: 'Change password',
+        templateData,
+        templatePath: path.join(__dirname, `./../email-template/${template}.html`),
+        to: email,
+    });
+}
+
