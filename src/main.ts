@@ -2,6 +2,7 @@ import express from 'express';
 import morgan from 'morgan';
 import path from 'path';
 import * as rfs from 'rotating-file-stream';
+import * as configJson from '../config.json';
 
 // create a rotating write stream
 const accessLogStream = rfs.createStream('access.log', {
@@ -43,7 +44,11 @@ const port = process.env.PORT || 3000;
 
 app.listen(port, function () {
     console.log(`Sync Server listening on port ${port}!`);
-
+    console.log('\nRealm configured:');
+    const realms = configJson.db.realms as any;
+    for (let realm in configJson.db.realms) {
+        console.log(`-  ${realm} : ${realms[realm]}`);
+    }
 });
 
 process.setMaxListeners(50);
