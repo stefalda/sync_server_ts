@@ -10,7 +10,7 @@ test
 .eslintignore
 .eslintrc.js
 .gitignore
-config_sample.json
+config.json
 config.sandman.json
 database*.sql
 docker*

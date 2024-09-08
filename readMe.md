@@ -51,11 +51,11 @@ services:
       - ./data:/var/lib/postgresql/data
     
   server:
-    image: docker.sfalda.com/sync_server:latest
+    image: sfalda/sync_server:latest
     restart: always
     container_name: sync-server
     ports:
-      - '8076:3000'
+      - '3000:3000'
     depends_on:
         db:
           condition: service_healthy

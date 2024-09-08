@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . ./
 
-RUN npm install 
+RUN mv config_sample.json config.json && npm install 
 
 RUN npm run build
 
