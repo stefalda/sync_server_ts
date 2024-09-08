@@ -12,9 +12,6 @@ export class UserRepository {
 
     private static instance: UserRepository;
 
-    private constructor() {
-
-    }
 
     public static getInstance(): UserRepository {
         if (!UserRepository.instance) {
@@ -217,7 +214,7 @@ export class UserRepository {
             `DELETE FROM  ${Tables.UserToken}  WHERE clientid IN (SELECT clientid FROM ${Tables.UserClient} WHERE userid = $1);`,
             `DELETE FROM ${Tables.UserClient} WHERE userid = $1;`,
             `DELETE FROM ${Tables.User} WHERE id =$1;`];
-            for (let s of sql) {
+            for (const s of sql) {
                 await db.query(s, [userid], { realm });
             }
         } catch (error) {
@@ -268,7 +265,7 @@ export class UserRepository {
             return false;
         }
         const now = new Date();
-        var differenceInMinutes = Math.abs(now.getTime() - userPin.created!) / 60000; //60*1000
+        const differenceInMinutes = Math.abs(now.getTime() - userPin.created!) / 60000; //60*1000
         if (differenceInMinutes > 15) {
             // The PIN is expired, delete...
             await this.deletePin(realm, db, user.id!);

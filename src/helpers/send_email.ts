@@ -1,5 +1,5 @@
+import path from 'node:path';
 import { sendMail } from "./email_client";
-const path = require('node:path');
 
 type ConfirmEmailPayload = {
     name: string;

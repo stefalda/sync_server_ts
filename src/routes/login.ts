@@ -6,16 +6,8 @@ import { LoginData, PasswordChangeData, RegistrationData } from '../models/api/r
 import { User, UserToken } from '../models/db/models';
 import { AuthenticationRepository } from '../repositories/authentication_repository';
 import { UserRepository } from '../repositories/user_repository';
-//import jwt from 'jsonwebtoken';
-//import { DatabaseRepository } from '../helpers/database_repository';
-//import { databaseMiddleware } from './../middleware/db_middleware';
-//import { secret } from './../middleware/verifyToken';
-
-
 
 const router = Router();
-
-//router.use(databaseMiddleware);
 
 /**
  * The register endpoint can be called to register a new user or just a new client
@@ -31,6 +23,7 @@ router.post('/register/:realm', async (req: any, res) => {
             res.json(result);
         }
     } catch (err) {
+        console.error(`/register/${req.params.realm}`, err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
 });
@@ -73,6 +66,9 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
     }
 });
 
+/**
+ * Perform a refresh token
+ */
 router.post('/login/:realm/refreshToken', async (req, res) => {
     try {
         const realm = req.params.realm;
