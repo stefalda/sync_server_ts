@@ -36,7 +36,7 @@ export const checkToken = async (req: Request, res: Response, next: any) => {
         }
         // Token expired
         const now = new Date();
-        var differenceInHours = Math.abs(now.getTime() - userToken.lastrefresh!) / 36e5; //60*60*1000
+        const differenceInHours = Math.abs(now.getTime() - userToken.lastrefresh!) / 36e5; //60*60*1000
         if (differenceInHours > 24) {
             return res.status(400).json(new ApiResult(400, "Token has expired"));
         }
@@ -62,12 +62,12 @@ export const checkToken = async (req: Request, res: Response, next: any) => {
 export const checkBasicAuthentication =
     async (req: Request, res: Response, next: any) => {
         try {
-            let authorization = req.headers['authorization'] as string;
+            const authorization = req.headers['authorization'] as string;
             if (!authorization) {
                 return res.status(403).json(new ApiResult(403, "Missing basic authentication"));
             }
             // Extract the simple authentication data
-            var encoded = authorization.split(' ')[1];
+            const encoded = authorization.split(' ')[1];
             // decode it using base64
             const decoded = Buffer.from(encoded, 'base64').toString();
             const [username, password] = decoded.split(':');
