@@ -1,0 +1,24 @@
+{
+    "server": {
+        "port": 8076
+    },
+    "db": {
+        "realms": {
+            "memento": "postgresql://stefano:gLpSetKZ284aJMKn58xstg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/memento_server?sslmode=verify-full",
+            "default": "postgresql://stefano:gLpSetKZ284aJMKn58xstg@bare-mantis-6973.7tc.cockroachlabs.cloud:26257/sync_server?sslmode=verify-full",
+            "babibooks": "postgresql://postgres:M@tilde07@localhost:5432/babibooks_sync_server"
+        }
+    },
+    "email": {
+        "from": "Stefano",
+        "fromEmail": "stefano@babisoft.com",
+        "smtp": "email-smtp.eu-west-3.amazonaws.com",
+        "port": "2587",
+        "username": "AKIAZX5BGGTSIZFIL4HD",
+        "password": "BIAtutlKipZmdd451+2LTQ/jJKiiKfqzvjrzqBOp/Oul",
+        "apps": {
+            "memento": "Memento",
+            "default": "Babisoft App"
+        }
+    }
+}

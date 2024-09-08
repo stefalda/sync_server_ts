@@ -10,14 +10,12 @@ export interface SyncData {
     tablename: string;
     clientdate: number;
     serverdate?: number;
-    //id?: number;
-    //userid?: number;
     clientid?: string;
     rowData: any;
 }
 
 export class SyncDataPullResponse {
-    lastSync: number = 0;
+    lastSync = 0;
     outdatedRowsGuid: Array<string> = [];
     data: Array<SyncData> = [];
 

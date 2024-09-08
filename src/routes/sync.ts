@@ -1,18 +1,13 @@
-//import bcrypt from 'bcrypt';
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import { checkToken } from '../middleware/authorization';
 import { SyncDataRequest } from '../models/api/sync_data';
 import { SyncRepository } from '../repositories/sync_repository';
-//import jwt from 'jsonwebtoken';
-//import { DatabaseRepository } from '../helpers/database_repository';
-//import { databaseMiddleware } from './../middleware/db_middleware';
-//import { secret } from './../middleware/verifyToken';
-
 
 const router = Router();
 
-//router.use(databaseMiddleware);
-
+/**
+ * Pull the changes stored in the sync server
+ */
 router.post('/pull/:realm', checkToken, async (req: any, res) => {
     try {
         const userToken = req.userToken;
@@ -24,9 +19,12 @@ router.post('/pull/:realm', checkToken, async (req: any, res) => {
     }
 });
 
-router.post('/push/:realm', checkToken, async (req: any, res) => {
+/**
+ * Push the changes to store in the sync server
+ */
+router.post('/push/:realm', checkToken, async (req: Request, res) => {
     try {
-        const userToken = req.userToken;
+        const userToken = (req as any).userToken;
         const syncData = req.body as SyncDataRequest;
         const result = await SyncRepository.getInstance().push(req.params.realm, syncData, userToken);
         res.json(result);

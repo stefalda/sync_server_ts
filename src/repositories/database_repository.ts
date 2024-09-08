@@ -1,11 +1,11 @@
 
 //const { Pool } = require('pg')
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import * as configJson from '../../config.json';
 
 
 export class DatabaseRepository {
-    private pools = new Map<String, Pool>;
+    private pools = new Map<string, Pool>;
 
     /*private pool = new Pool({
         connectionString,
@@ -14,7 +14,7 @@ export class DatabaseRepository {
     private static instance: DatabaseRepository;
 
     private getPool(realm: string): Pool {
-        let pool = this.pools.get(realm.toLowerCase());
+        const pool = this.pools.get(realm.toLowerCase());
         if (!pool) {
             return this.pools.get("default")!;
         }
@@ -25,12 +25,12 @@ export class DatabaseRepository {
     private constructor() {
         // Number as treated as string, so force int8 to be parsed with parseInt
         // https://github.com/brianc/node-pg-types
-        var types = require('pg').types
+        //const types = require('pg').types
         types.setTypeParser(20, (val: string) =>
             parseInt(val, 10)
         );
         // Start pools
-        for (let realm in configJson.db.realms) {
+        for (const realm in configJson.db.realms) {
             const connectionString = (configJson.db.realms as any)[realm];
             this.pools.set(realm, new Pool({ connectionString }));
         }

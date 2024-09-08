@@ -1,8 +1,11 @@
 {
     "extends": "@tsconfig/node18/tsconfig.json",
+    "allowImportingTsExtensions": true,
     "compilerOptions": {
         "outDir": "./dist",
         "resolveJsonModule": true,
+        "module": "CommonJS", // Set module system to CommonJS
+        "moduleResolution": "Node"
     },
     "include": [
         "src"
