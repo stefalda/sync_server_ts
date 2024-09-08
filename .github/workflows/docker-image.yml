@@ -23,8 +23,8 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
     
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag sfalda/sync_server:latest \
-                  --tag sfalda/sync_server:v1.0.0 \
-                  --tag sfalda/sync_server:stable
+      run: docker build --file Dockerfile --tag sfalda/sync_server:latest \
+                  --tag sfalda/sync_server:v1.x.x \
+                  --tag sfalda/sync_server:stable .
     - name: Push the Docker image
       run: docker push ${{ secrets.DOCKER_REGISTRY }}/rssfeedeater-server
