@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "runtimeExecutable": "/Users/ste/.nvm/versions/node/v18.14.0/bin/node",
+            "runtimeExecutable": "node",
             "name": "Debug main.ts",
             "type": "node",
             "request": "launch",

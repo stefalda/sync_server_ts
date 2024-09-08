@@ -7,12 +7,6 @@ export class AuthenticationRepository {
 
 
 
-    private constructor() {
-
-    }
-
-
-
     public static getInstance(): AuthenticationRepository {
         if (!AuthenticationRepository.instance) {
             AuthenticationRepository.instance = new AuthenticationRepository();
@@ -61,8 +55,8 @@ export class AuthenticationRepository {
 
     async generateToken(realm: string, clientid: string): Promise<UserToken> {
         const userToken = new UserToken();
-        userToken.token = randomUUID();;
-        userToken.refreshtoken = randomUUID();;
+        userToken.token = randomUUID();
+        userToken.refreshtoken = randomUUID();
         userToken.lastrefresh = new Date().getTime();
         userToken.clientid = clientid;
         await this.updateToken(realm, userToken);
