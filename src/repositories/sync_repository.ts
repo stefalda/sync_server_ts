@@ -7,14 +7,6 @@ export class SyncRepository {
 
     private static instance: SyncRepository;
 
-
-
-    private constructor() {
-
-    }
-
-
-
     public static getInstance(): SyncRepository {
         if (!SyncRepository.instance) {
             SyncRepository.instance = new SyncRepository();
@@ -32,7 +24,7 @@ export class SyncRepository {
 
     async pull(realm: any, syncDataRequest: SyncDataRequest, userToken: UserToken): Promise<SyncDataPullResponse> {
         // Ottieni lo userClient
-        const userClient =
+        const userClient: UserClient =
             await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
         if (!userClient) {
             throw Error("Client id not found!");
@@ -43,14 +35,20 @@ export class SyncRepository {
         }
         // Segna la sincronizzazione come attiva
         userClient.syncing = new Date().getTime();
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const clientid: string = userClient.clientid!;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const userid: string = userClient.userid!;
+
+
         await UserRepository.getInstance().setUserClient(realm, userClient);
-        const syncDataPullResponse = new SyncDataPullResponse(userClient.clientid!);
+        const syncDataPullResponse = new SyncDataPullResponse(clientid);
         try {
             // Cicla sui cambiamenti presenti sul server
-            const serverChanges = await this.getServerChanges(realm, userClient.userid!, syncDataRequest.lastSync) || [];
+            const serverChanges = await this.getServerChanges(realm, userid, syncDataRequest.lastSync) || [];
             // Confronta i cambiamenti presenti sul client con quelli del server
             // per capire se alcuni sono sorpassati e non vanno acquisiti (e viceversa)
-            for (let client of syncDataRequest.changes) {
+            for (const client of syncDataRequest.changes) {
                 // Filter server data by rowguid and check the date
                 const serverData =
                     serverChanges.filter((server) => server.rowguid == client.rowguid);
@@ -70,7 +68,7 @@ export class SyncRepository {
             }
             // Aggiungi ai serverChanges i dati da inviare al client per il suo aggiornamento
             // a meno che si tratti di una cancellazione
-            for (let serverChange of serverChanges) {
+            for (const serverChange of serverChanges) {
                 if (serverChange.operation != "D") {
                     const data = await this.getRowDataValue(realm, serverChange.rowguid);
                     serverChange.rowData = data['json'];
@@ -105,7 +103,7 @@ export class SyncRepository {
 
         try {
 
-            for (let clientChange of syncDataRequest.changes) {
+            for (const clientChange of syncDataRequest.changes) {
                 // Aggiorna i dati a partire da quanto contenuto nel campo data
                 //print(
                 //    "Table:${clientChange.tablename} Operation:${clientChange.operation} Key:${clientChange.rowguid}");
@@ -161,7 +159,7 @@ export class SyncRepository {
         if (userClient.syncing == null) return false;
         // Verifica se la sincronizzazione dura da più di 5', nel caso annullala
         const now = new Date();
-        var differenceInMinutes = Math.abs(now.getTime() - userClient.syncing!) / 1000 / 60;
+        const differenceInMinutes = Math.abs(now.getTime() - userClient.syncing!) / 1000 / 60;
         if (differenceInMinutes > 2) {
             userClient.syncing = null;
             UserRepository.getInstance().setUserClient(realm, userClient);
