@@ -68,7 +68,8 @@ export class DatabaseRepository {
 
             return res.rows;
         } catch (err: any) {
-            console.log(err.stack)
+            console.error(`database_repository - query - sql:${sql} - err: ${err}`)
+            console.error(err.stack)
         } finally {
             client.release()
         }
