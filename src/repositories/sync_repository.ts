@@ -168,6 +168,24 @@ export class SyncRepository {
         return true;
     }
 
+    /**
+     * Cancel current sync because some error occurred client side
+     * @param realm 
+     * @param clientid 
+     * @param userToken 
+     * @returns 
+     */
+    public async cancelSync(realm: any, clientId: string): Promise<boolean> {
+        const userClient: UserClient =
+            await UserRepository.getInstance().getUserClient(realm, clientId);
+        if (!userClient) {
+            throw Error("Client id not found, cannot cancel sync!");
+        }
+        userClient.syncing = null;
+        UserRepository.getInstance().setUserClient(realm, userClient);
+        return true;
+    }
+
     /// Get changes from DB (required clientid, ???)
     private async getServerChanges(realm: string, userId: string, lastSync: number): Promise<Array<SyncData>> {
         const sql = `
