@@ -33,4 +33,17 @@ router.post('/push/:realm', checkToken, async (req: Request, res) => {
     }
 });
 
+/**
+ * Push the changes to store in the sync server
+ */
+router.post('/cancelSync/:realm', checkToken, async (req: Request, res) => {
+    try {
+        const data = req.body as { clientId: string };
+        const result = await SyncRepository.getInstance().cancelSync(req.params.realm, data.clientId);
+        res.json(result);
+    } catch (err) {
+        res.status(500).send({ message: (err as Error).message });
+    }
+});
+
 export default router;
