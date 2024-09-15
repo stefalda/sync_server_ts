@@ -11,10 +11,10 @@ async function testRegistration() {
             "host": "memento.babisoft.com",
         },
         body: JSON.stringify({
-            "password": "sandman",
+            "password": "password123",
             "newRegistration": true,
             "clientId": "e64bec40-eb61-4fb8-a2d0-532925c6df1f",
-            "email": "stefano.falda@gmail.com",
+            "email": "stefano@test.com",
             "deleteRemoteData": false,
             "name": "ste",
             "clientDescription": "{\"name\":\"Stefano’s MacBook Pro\",\"systemName\":\"MACOS\",\"systemVersion\":\"Version 13.3.1 (a) (Build 22E772610a)\",\"model\":\"MacBookPro18,1\"}"
