@@ -182,11 +182,14 @@ services:
    ```
 
 3. Configure the server:
+
    The server is able to support different *realm* each one with its specific database backend.
    Every *realm* should be defined in the **config.json** file in the dist folder or in the base folder for development.
    **Beware that the realm should be coded in lowercase.**
+   
    Example config.json:
-   ```json
+
+```json
 {
     "db": {
         "realms": {
@@ -210,7 +213,7 @@ services:
          }
     }
 }
-   ```
+```
 
 4. Run the server:
    ```bash
