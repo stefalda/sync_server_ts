@@ -1,6 +1,7 @@
 //{message: Missing bearer token}
 
 import { Request, Response } from 'express';
+import { logger } from '../helpers/logger';
 import { ApiResult } from '../models/api/api_result';
 import { AuthenticationRepository } from '../repositories/authentication_repository';
 import { UserRepository } from '../repositories/user_repository';
@@ -45,6 +46,8 @@ export const checkToken = async (req: Request, res: Response, next: any) => {
         // Can access...
         next();
     } catch (error) {
+        logger.error(error);
+
         return res.status(401).json({ error: `Authentication error ${error}` });
     }
 };
@@ -83,6 +86,7 @@ export const checkBasicAuthentication =
             // Can access...
             next();
         } catch (error) {
+            logger.error(error);
             return res.status(401).json({ error: 'Missing bearer token' });
         }
     }

@@ -1,4 +1,4 @@
-import path from 'node:path';
+import * as path from 'node:path';
 import { sendMail } from "./email_client";
 
 type ConfirmEmailPayload = {
@@ -8,7 +8,6 @@ type ConfirmEmailPayload = {
 };
 
 export async function sendPin(name: string, email: string, app: string, pin: string, language: string) {
-    email = "stefano.falda@gmail.com";//FORCED
     const templateData: ConfirmEmailPayload = {
         name,
         app,

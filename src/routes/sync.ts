@@ -1,8 +1,8 @@
 import { Request, Router } from 'express';
+import { logger } from '../helpers/logger';
 import { checkToken } from '../middleware/authorization';
 import { SyncDataRequest } from '../models/api/sync_data';
 import { SyncRepository } from '../repositories/sync_repository';
-
 const router = Router();
 
 /**
@@ -15,6 +15,7 @@ router.post('/pull/:realm', checkToken, async (req: any, res) => {
         const result = await SyncRepository.getInstance().pull(req.params.realm, syncData, userToken);
         res.json(result);
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ message: (err as Error).message });
     }
 });
@@ -29,6 +30,7 @@ router.post('/push/:realm', checkToken, async (req: Request, res) => {
         const result = await SyncRepository.getInstance().push(req.params.realm, syncData, userToken);
         res.json(result);
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ message: (err as Error).message });
     }
 });
@@ -42,7 +44,9 @@ router.post('/cancelSync/:realm', checkToken, async (req: Request, res) => {
         const result = await SyncRepository.getInstance().cancelSync(req.params.realm, data.clientId);
         res.json(result);
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ message: (err as Error).message });
+
     }
 });
 

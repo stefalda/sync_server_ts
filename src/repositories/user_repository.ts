@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import * as configJson from '../../config.json';
+import { logger } from "../helpers/logger";
 import { sendPin } from "../helpers/send_email";
 import { encryptPassword } from "../helpers/utils";
 import { ApiResult } from "../models/api/api_result";
@@ -174,6 +175,7 @@ export class UserRepository {
             await this.setUserClient(realm, uc);
             return new ApiResult(200, "OK");
         } catch (error) {
+            logger.error(error);
             throw (error);
         }
     }
@@ -195,6 +197,7 @@ export class UserRepository {
             const sqlClient = `DELETE FROM ${Tables.UserClient} WHERE userid = $1 AND clientid = $2`;
             await db.query(sqlClient, [userid, clientId], { realm });
         } catch (error) {
+            logger.error(error);
             throw (error);
         }
     }
@@ -218,6 +221,7 @@ export class UserRepository {
                 await db.query(s, [userid], { realm });
             }
         } catch (error) {
+            logger.error(error);
             throw (error);
         }
     }

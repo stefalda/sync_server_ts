@@ -1,7 +1,7 @@
 import * as fs from 'fs';
-import handlebars from 'handlebars';
+import * as handlebars from 'handlebars';
 import * as nodemailer from 'nodemailer';
-import Mail from 'nodemailer/lib/mailer';
+import * as Mail from 'nodemailer/lib/mailer';
 import * as configJson from '../../config.json';
 // https://blog.tericcabrel.com/send-email-nodejs-handlebars-amazon-ses/
 type EmailClientArgs<TemplateData> = {

@@ -1,5 +1,6 @@
 //import bcrypt from 'bcrypt';
 import { Router } from 'express';
+import { logger } from '../helpers/logger';
 import { checkBasicAuthentication, checkToken } from '../middleware/authorization';
 import { ApiResult } from '../models/api/api_result';
 import { LoginData, PasswordChangeData, RegistrationData } from '../models/api/registration';
@@ -23,6 +24,7 @@ router.post('/register/:realm', async (req: any, res) => {
             res.json(result);
         }
     } catch (err) {
+        logger.error(err);
         console.error(`/register/${req.params.realm}`, err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
@@ -38,6 +40,7 @@ router.post('/unregister/:realm', checkToken, async (req: any, res) => {
         res.status(result.code).json(result);
         //res.json(new ApiResult(200, "User and Client unregistered successfully!"));
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
 });
@@ -62,6 +65,7 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
         const userToken = await AuthenticationRepository.getInstance().generateToken(realm, clientId);
         res.json(tokenFromUserToken(userToken));
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
 });
@@ -83,6 +87,7 @@ router.post('/login/:realm/refreshToken', async (req, res) => {
         userToken = await AuthenticationRepository.getInstance().generateToken(realm, userToken.clientid!);
         res.json(tokenFromUserToken(userToken));
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
 });
@@ -109,6 +114,7 @@ router.post('/password/:realm/forgotten', async (req: any, res) => {
         await UserRepository.getInstance().generatePin(req.params.realm, email);
         res.json(new ApiResult(200, "PIN generated and email sent!"));
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
 });
@@ -126,6 +132,7 @@ router.post('/password/:realm/change', async (req: any, res) => {
         }
         res.json(new ApiResult(200, "Password changed successfully!"));
     } catch (err) {
+        logger.error(err);
         res.status(500).send({ error: 'Error changing user password: ' + err });
     }
 });

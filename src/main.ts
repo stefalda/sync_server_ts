@@ -1,28 +1,29 @@
-import express from 'express';
-import morgan from 'morgan';
-import path from 'path';
-import * as rfs from 'rotating-file-stream';
+import * as express from 'express';
 import * as configJson from '../config.json';
 
-// create a rotating write stream
-const accessLogStream = rfs.createStream('access.log', {
-    interval: '1d', // rotate daily
-    path: path.join(__dirname, '..', 'log')
-});
 
 
 /*import { DatabaseRepository } from './helpers/database_repository';
 import admin from './routes/admin';
 import api_scraper from './routes/api_scraper';
 */
-import cors from 'cors';
+import * as cors from 'cors';
+import { logger } from './helpers/logger';
 import base from './routes/base';
 import login from './routes/login';
 import sync from './routes/sync';
+import morgan = require('morgan');
 const app = express();
 app.use(cors());
 // Log calls
-app.use(morgan('[:date[iso]] :method :url :status :res[content-length] - :response-time ms - :remote-addr - :remote-user', { stream: accessLogStream }));
+// app.use(morgan('[:date[iso]] :method :url :status :res[content-length] - :response-time ms - :remote-addr - :remote-user', { stream: accessLogStream }));
+// Stream option for morgan to log using winston
+const morganStream = {
+    write: (message) => logger.info(message.trim())  // Use 'info' log level
+};
+
+// Use morgan middleware with winston stream
+app.use(morgan('combined', { stream: morganStream }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -43,11 +44,11 @@ const port = process.env.PORT || 3000;
 
 
 app.listen(port, function () {
-    console.log(`Sync Server listening on port ${port}!`);
-    console.log('\nRealm configured:');
+    logger.info(`Sync Server listening on port ${port}!`);
+    logger.info('Realm configured:');
     const realms = configJson.db.realms as any;
     for (let realm in configJson.db.realms) {
-        console.log(`-  ${realm} : ${realms[realm]}`);
+        logger.info(` -  ${realm} : ${realms[realm]}`);
     }
 });
 

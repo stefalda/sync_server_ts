@@ -1,3 +1,4 @@
+import { logger } from "../helpers/logger";
 import { SyncData, SyncDataPullResponse, SyncDataPushResponse, SyncDataRequest } from "../models/api/sync_data";
 import { Tables, UserClient, UserToken } from "../models/db/models";
 import { DatabaseRepository } from "./database_repository";
@@ -68,17 +69,25 @@ export class SyncRepository {
             }
             // Aggiungi ai serverChanges i dati da inviare al client per il suo aggiornamento
             // a meno che si tratti di una cancellazione
-            for (const serverChange of serverChanges) {
+            const finalServerChanges = [];
+            for (let i = 0; i < serverChanges.length; i++) {
+                const serverChange = serverChanges[i];
                 if (serverChange.operation != "D") {
+                    // Check if data is not null... (it shouldn't happen)
                     const data = await this.getRowDataValue(realm, serverChange.rowguid);
-                    serverChange.rowData = data['json'];
+                    if (data && data['json']) {
+                        serverChange.rowData = data['json'];
+                        finalServerChanges.push(serverChange);
+                    }
                 }
             }
+            logger.debug(`serverChanges to be pulled: ${finalServerChanges.length} skipped ${(serverChanges.length - finalServerChanges.length)}`);
             // Aggiungi a syncDetails le modifiche presenti sul server e da applicare sul client
-            syncDataPullResponse.data = serverChanges;
+            syncDataPullResponse.data = finalServerChanges;
             return syncDataPullResponse;
         }
         catch (ex) {
+            logger.error(ex);
             // Reset syncing date
             if (userClient) {
                 userClient.syncing = null;
@@ -121,6 +130,7 @@ export class SyncRepository {
             return new SyncDataPushResponse(userClient.lastsync!);
         }
         catch (ex) {
+            logger.error(ex);
             // Reset syncing date
             if (userClient) {
                 userClient.syncing = null;

@@ -4,7 +4,7 @@
 .vscode
 Dockerfile
 dist
-log
+logs
 node_modules
 test
 .eslintignore

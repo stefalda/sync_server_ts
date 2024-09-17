@@ -2,6 +2,7 @@
 //const { Pool } = require('pg')
 import { Pool, types } from 'pg';
 import * as configJson from '../../config.json';
+import { logger } from '../helpers/logger';
 
 
 export class DatabaseRepository {
@@ -68,6 +69,7 @@ export class DatabaseRepository {
 
             return res.rows;
         } catch (err: any) {
+            logger.error(err);
             console.error(`database_repository - query - sql:${sql} - err: ${err}`)
             console.error(err.stack)
         } finally {

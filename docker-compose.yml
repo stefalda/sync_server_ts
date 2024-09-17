@@ -41,3 +41,4 @@ services:
           condition: service_healthy
     volumes:
       - ./dist/config.json:/app/dist/config.json
+      - ./logs:/app/dist/logs
