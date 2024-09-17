@@ -1,10 +1,10 @@
 const winston = require('winston');
 require('winston-daily-rotate-file');
-
+import * as path from 'path';
 
 // Create a single transport for all log levels
 const transport = new winston.transports.DailyRotateFile({
-    filename: 'logs/application-%DATE%.log',  // Single file for all logs
+    filename: path.join(__dirname, '../..', 'logs') + '/application-%DATE%.log',  // Single file for all logs
     datePattern: 'YYYY-MM-DD',
     maxSize: '20m',          // Rotate file when it reaches 20MB
     maxFiles: '14d',         // Keep log files for 14 days
