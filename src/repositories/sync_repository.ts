@@ -72,14 +72,14 @@ export class SyncRepository {
             const finalServerChanges = [];
             for (let i = 0; i < serverChanges.length; i++) {
                 const serverChange = serverChanges[i];
-                if (serverChange.operation != "D") {
+                if (serverChange.operation !== "D") {
                     // Check if data is not null... (it shouldn't happen)
                     const data = await this.getRowDataValue(realm, serverChange.rowguid);
                     if (data && data['json']) {
                         serverChange.rowData = data['json'];
-                        finalServerChanges.push(serverChange);
                     }
                 }
+                finalServerChanges.push(serverChange);
             }
             logger.debug(`serverChanges to be pulled: ${finalServerChanges.length} skipped ${(serverChanges.length - finalServerChanges.length)}`);
             // Aggiungi a syncDetails le modifiche presenti sul server e da applicare sul client
