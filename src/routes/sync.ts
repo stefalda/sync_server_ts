@@ -10,9 +10,8 @@ const router = Router();
  */
 router.post('/pull/:realm', checkToken, async (req: any, res) => {
     try {
-        const userToken = req.userToken;
         const syncData = req.body as SyncDataRequest;
-        const result = await SyncRepository.getInstance().pull(req.params.realm, syncData, userToken);
+        const result = await SyncRepository.getInstance().pull(req.params.realm, syncData);
         res.json(result);
     } catch (err) {
         logger.error(err);
@@ -25,9 +24,8 @@ router.post('/pull/:realm', checkToken, async (req: any, res) => {
  */
 router.post('/push/:realm', checkToken, async (req: Request, res) => {
     try {
-        const userToken = (req as any).userToken;
         const syncData = req.body as SyncDataRequest;
-        const result = await SyncRepository.getInstance().push(req.params.realm, syncData, userToken);
+        const result = await SyncRepository.getInstance().push(req.params.realm, syncData);
         res.json(result);
     } catch (err) {
         logger.error(err);

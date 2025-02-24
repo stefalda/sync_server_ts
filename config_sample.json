@@ -1,4 +1,9 @@
 {
+    "server": {
+        "port": 8076,
+        "authentication": "jwt|token",
+        "secret_key": "JWT_SECRET_KEY"
+    },
     "db": {
         "realms": {
             "default": "postgresql://"

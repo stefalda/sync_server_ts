@@ -1,7 +1,7 @@
 //import bcrypt from 'bcrypt';
 import { Router } from 'express';
 import { logger } from '../helpers/logger';
-import { checkBasicAuthentication, checkToken } from '../middleware/authorization';
+import { checkBasicAuthentication, checkToken, generateJWTToken, useJWT } from '../middleware/authorization';
 import { ApiResult } from '../models/api/api_result';
 import { LoginData, PasswordChangeData, RegistrationData } from '../models/api/registration';
 import { User, UserToken } from '../models/db/models';
@@ -62,8 +62,15 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
             return;
         }
         // Register a new Token
-        const userToken = await AuthenticationRepository.getInstance().generateToken(realm, clientId);
-        res.json(tokenFromUserToken(userToken));
+        if (!useJWT) {
+            // SIMPLE TOKEN
+            const userToken = await AuthenticationRepository.getInstance().generateToken(realm, clientId);
+            res.json(tokenFromUserToken(userToken));
+        } else {
+            // JWT
+            const token = generateJWTToken(user.id, user.email);
+            res.json({ token });
+        }
     } catch (err) {
         logger.error(err);
         res.status(500).send({ error: 'Error registering user: ' + err });
@@ -75,6 +82,9 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
  */
 router.post('/login/:realm/refreshToken', async (req, res) => {
     try {
+        if (useJWT) {
+            throw ("The server is configured to use JWT authentication, this method should be called only when using standard token authentication.")
+        }
         const realm = req.params.realm;
         const { refreshToken } = req.body;
         // Get the UserToken from refreshToken

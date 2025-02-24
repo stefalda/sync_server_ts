@@ -1,10 +1,15 @@
 //{message: Missing bearer token}
 
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
+import * as configJson from '../../config.json';
 import { logger } from '../helpers/logger';
 import { ApiResult } from '../models/api/api_result';
 import { AuthenticationRepository } from '../repositories/authentication_repository';
 import { UserRepository } from '../repositories/user_repository';
+
+// Check if the configuration is jwt or token based
+export const useJWT = configJson.server.authentication === 'jwt';
+
 
 /**
  * Check Bearer Token after logging in 
@@ -16,7 +21,7 @@ import { UserRepository } from '../repositories/user_repository';
  * @param next 
  * @returns 
  */
-export const checkToken = async (req: Request, res: Response, next: any) => {
+const checkSimpleToken = async (req: Request, res: Response, next: NextFunction) => {
     // console.log("BODY: " + JSON.stringify(req.body));
     try {
 
@@ -51,6 +56,50 @@ export const checkToken = async (req: Request, res: Response, next: any) => {
         return res.status(401).json({ error: `Authentication error ${error}` });
     }
 };
+
+/**
+ * Check JWT Bearer Token after logging in 
+ * 
+ * At the end, it injects the decoded token payload in `req.user`
+ * 
+ * @param req 
+ * @param res 
+ * @param next 
+ * @returns 
+ */
+const checkJWTToken = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        let token = req.headers['authorization'] as string;
+
+        if (!token || !token.startsWith("Bearer ")) {
+            return res.status(401).json(new ApiResult(401, "Missing or invalid bearer token"));
+        }
+
+        // Extract the token (removing "Bearer " prefix)
+        token = token.substring(7).trim();
+
+        // Verify JWT token
+        const jwt = require('jsonwebtoken');
+        jwt.verify(token, configJson.server.secret_key, (err, decoded) => {
+            if (err) {
+                return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
+            }
+
+            // Attach the decoded payload to the request
+            (req as any).user = decoded; // You may define an interface for req.user
+
+            next(); // Proceed to the next middleware
+        });
+
+    } catch (error) {
+        logger.error(error);
+        return res.status(500).json({ error: `Authentication error: ${error.message}` });
+    }
+};
+
+
+export const checkToken = useJWT ? checkJWTToken : checkSimpleToken;
+
 
 /**
  * Check the Simple Authentication when performing Login
@@ -91,3 +140,18 @@ export const checkBasicAuthentication =
         }
     }
 
+/**
+ * Generate JWT token
+ * @param userId 
+ * @param email 
+ * @returns 
+ */
+export function
+    generateJWTToken(userId: string, email: string): String {
+    const jwt = require('jsonwebtoken');
+    return jwt.sign(
+        { userid: userId, email, iat: Date.now() },
+        configJson.server.secret_key,
+        { expiresIn: "24h" } // Token expires in 24 hours
+    );
+}

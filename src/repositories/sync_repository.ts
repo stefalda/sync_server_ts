@@ -1,6 +1,6 @@
 import { logger } from "../helpers/logger";
 import { SyncData, SyncDataPullResponse, SyncDataPushResponse, SyncDataRequest } from "../models/api/sync_data";
-import { Tables, UserClient, UserToken } from "../models/db/models";
+import { Tables, UserClient } from "../models/db/models";
 import { DatabaseRepository } from "./database_repository";
 import { UserRepository } from "./user_repository";
 
@@ -23,7 +23,7 @@ export class SyncRepository {
 
     }
 
-    async pull(realm: any, syncDataRequest: SyncDataRequest, userToken: UserToken): Promise<SyncDataPullResponse> {
+    async pull(realm: any, syncDataRequest: SyncDataRequest): Promise<SyncDataPullResponse> {
         // Ottieni lo userClient
         const userClient: UserClient =
             await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
@@ -98,7 +98,7 @@ export class SyncRepository {
 
     }
 
-    async push(realm: any, syncDataRequest: SyncDataRequest, userToken: UserToken): Promise<SyncDataPushResponse> {
+    async push(realm: any, syncDataRequest: SyncDataRequest): Promise<SyncDataPushResponse> {
         // Ottieni lo userClient
         const userClient =
             await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
