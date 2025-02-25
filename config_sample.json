@@ -2,7 +2,8 @@
     "server": {
         "port": 8076,
         "authentication": "jwt|token",
-        "secret_key": "JWT_SECRET_KEY"
+        "secret_key": "JWT_SECRET_KEY",
+        "secret_key_refresh": "JWT_SECRET_KEY2"
     },
     "db": {
         "realms": {

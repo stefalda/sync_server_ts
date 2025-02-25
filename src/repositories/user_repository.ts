@@ -67,7 +67,7 @@ export class UserRepository {
      * @param email 
      * @returns 
      */
-    private async getUserFromDB(realm: string, email: string): Promise<User | null> {
+    async getUserFromDB(realm: string, email: string): Promise<User | null> {
         const db = await this.getDB();
         const sql = `SELECT id, name, email, password, salt, language FROM ${Tables.User} WHERE 
                         email = $1`;

@@ -155,3 +155,13 @@ export function
         { expiresIn: "24h" } // Token expires in 24 hours
     );
 }
+
+export function
+    generateRefreshJWTToken(userId: string, email: string): String {
+    const jwt = require('jsonwebtoken');
+    return jwt.sign(
+        { userid: userId, email },
+        configJson.server.secret_key_refresh,
+        { expiresIn: "7d" } // Refresh Token expires in 7 days
+    );
+}

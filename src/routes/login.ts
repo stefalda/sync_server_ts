@@ -1,7 +1,8 @@
 //import bcrypt from 'bcrypt';
-import { Router } from 'express';
+import { Request, Response, Router } from 'express';
+import * as configJson from '../../config.json';
 import { logger } from '../helpers/logger';
-import { checkBasicAuthentication, checkToken, generateJWTToken, useJWT } from '../middleware/authorization';
+import { checkBasicAuthentication, checkToken, generateJWTToken, generateRefreshJWTToken, useJWT } from '../middleware/authorization';
 import { ApiResult } from '../models/api/api_result';
 import { LoginData, PasswordChangeData, RegistrationData } from '../models/api/registration';
 import { User, UserToken } from '../models/db/models';
@@ -13,7 +14,7 @@ const router = Router();
 /**
  * The register endpoint can be called to register a new user or just a new client
  */
-router.post('/register/:realm', async (req: any, res) => {
+router.post('/register/:realm', async (req: Request, res: Response) => {
     try {
         const registrationData = req.body as RegistrationData;
         // Register the user & the client
@@ -33,7 +34,7 @@ router.post('/register/:realm', async (req: any, res) => {
 /**
  * Unregister the client and optionally remove all the user data
  */
-router.post('/unregister/:realm', checkToken, async (req: any, res) => {
+router.post('/unregister/:realm', checkToken, async (req: Request, res: Response) => {
     try {
         const registrationData = req.body as RegistrationData;
         const result = await UserRepository.getInstance().unregister(req.params.realm, registrationData);
@@ -50,7 +51,7 @@ router.post('/unregister/:realm', checkToken, async (req: any, res) => {
 /**
  * Login the user and register the client (use Basic Authentication)
  */
-router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
+router.post('/login/:realm', checkBasicAuthentication, async (req: Request, res: Response) => {
     try {
         const user: User = (req as any).user;
         const realm = req.params.realm;
@@ -68,8 +69,7 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
             res.json(tokenFromUserToken(userToken));
         } else {
             // JWT
-            const token = generateJWTToken(user.id, user.email);
-            res.json({ token });
+            createNewJWTToken(user, res);
         }
     } catch (err) {
         logger.error(err);
@@ -80,27 +80,49 @@ router.post('/login/:realm', checkBasicAuthentication, async (req, res) => {
 /**
  * Perform a refresh token
  */
-router.post('/login/:realm/refreshToken', async (req, res) => {
+router.post('/login/:realm/refreshToken', async (req: Request, res: Response) => {
     try {
-        if (useJWT) {
-            throw ("The server is configured to use JWT authentication, this method should be called only when using standard token authentication.")
-        }
         const realm = req.params.realm;
         const { refreshToken } = req.body;
-        // Get the UserToken from refreshToken
-        let userToken = await AuthenticationRepository.getInstance().getTokenFromRefreshToken(realm, refreshToken);
-        if (userToken == null) {
-            res.status(403).send(new ApiResult(403, "Invalid refresh token, please relogin"));
-            return;
+        if (!useJWT) {
+            // Get the UserToken from refreshToken
+            let userToken = await AuthenticationRepository.getInstance().getTokenFromRefreshToken(realm, refreshToken);
+            if (userToken == null) {
+                res.status(403).send(new ApiResult(403, "Invalid refresh token, please relogin"));
+                return;
+            }
+            // Update the userToken
+            userToken = await AuthenticationRepository.getInstance().generateToken(realm, userToken.clientid!);
+            res.json(tokenFromUserToken(userToken));
+        } else {
+            // JWT Token
+            // Verify JWT token
+            const jwt = require('jsonwebtoken');
+            let userid, email = null;
+            jwt.verify(refreshToken, configJson.server.secret_key, (err, decoded) => {
+                if (err) {
+                    return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
+                }
+                email = decoded.email;
+                userid = decoded.userid;
+            });
+            const user = await UserRepository.getInstance().getUserFromDB(realm, email);
+            if (!user) {
+                return res.status(403).json(new ApiResult(403, "User not found, please relogin"));
+            }
+            createNewJWTToken(user, res);
         }
-        // Update the userToken
-        userToken = await AuthenticationRepository.getInstance().generateToken(realm, userToken.clientid!);
-        res.json(tokenFromUserToken(userToken));
     } catch (err) {
         logger.error(err);
         res.status(500).send({ error: 'Error registering user: ' + err });
     }
 });
+
+function createNewJWTToken(user: User, res: Response) {
+    const token = generateJWTToken(user.id, user.email);
+    const refreshToken = generateRefreshJWTToken(user.id, user.email);
+    res.json({ accessToken: token, refreshToken });
+}
 
 function tokenFromUserToken(userToken: UserToken) {
     return {
@@ -118,7 +140,7 @@ function tokenFromUserToken(userToken: UserToken) {
  * The pin is checked in the /password/change POST call
  * that change the password
  */
-router.post('/password/:realm/forgotten', async (req: any, res) => {
+router.post('/password/:realm/forgotten', async (req: Request, res: Response) => {
     try {
         const { email } = req.body as { email: string };
         await UserRepository.getInstance().generatePin(req.params.realm, email);
@@ -132,7 +154,7 @@ router.post('/password/:realm/forgotten', async (req: any, res) => {
 /**
  * Password change - check if the PIN is the same that  has been sent to the email address
  */
-router.post('/password/:realm/change', async (req: any, res) => {
+router.post('/password/:realm/change', async (req: Request, res: Response) => {
     try {
         const registrationData = req.body as PasswordChangeData;
         const result = await UserRepository.getInstance().changePassword(req.params.realm, registrationData);
