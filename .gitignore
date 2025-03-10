@@ -3,3 +3,4 @@ dist
 config.json
 logs
 data
+temp_uploads

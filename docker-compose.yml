@@ -42,3 +42,4 @@ services:
     volumes:
       - ./dist/config.json:/app/dist/config.json
       - ./logs:/app/dist/logs
+      - ./temp_uploads:/app/dist/temp_uploads

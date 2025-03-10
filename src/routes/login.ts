@@ -106,6 +106,8 @@ router.post('/login/:realm/refreshToken', async (req: Request, res: Response) =>
                 email = decoded.email;
                 userid = decoded.userid;
             });
+            // Something went wrong...
+            if (res.statusCode === 403) return;
             const user = await UserRepository.getInstance().getUserFromDB(realm, email);
             if (!user) {
                 return res.status(403).json(new ApiResult(403, "User not found, please relogin"));
@@ -114,7 +116,11 @@ router.post('/login/:realm/refreshToken', async (req: Request, res: Response) =>
         }
     } catch (err) {
         logger.error(err);
-        res.status(500).send({ error: 'Error registering user: ' + err });
+        try {
+            res.status(500).send({ error: 'Error registering user: ' + err });
+        } catch (error) {
+            logger.error(error);
+        }
     }
 });
 

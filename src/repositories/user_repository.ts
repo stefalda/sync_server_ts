@@ -82,7 +82,7 @@ export class UserRepository {
     * @returns 
     */
     async register(realm: string, registrationData: RegistrationData): Promise<ApiResult | RegistrationResult> {
-        const emailAlreadyRegistered = await this.isEmailAlreadyRegistered(realm, registrationData.email);
+        const emailAlreadyRegistered = await this.isEmailAlreadyRegistered(realm, registrationData.email.toLowerCase());
         // New registration but email is already registered
         if (emailAlreadyRegistered && registrationData.newRegistration) {
             return new ApiResult(500, "The email is already registered, try to register the client instead...");
@@ -109,7 +109,7 @@ export class UserRepository {
             // Register a new user
             user = new User()
             user.name = registrationData.name;
-            user.email = registrationData.email;
+            user.email = registrationData.email.toLowerCase();
             user.salt = randomUUID();
             user.password = encryptPassword(registrationData.password, user.salt);
             user.language = registrationData.language;

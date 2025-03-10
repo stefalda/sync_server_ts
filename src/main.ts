@@ -18,7 +18,7 @@ import morgan = require('morgan');
 const app = express();
 app.use(cors());
 // Log calls
-// app.use(morgan('[:date[iso]] :method :url :status :res[content-length] - :response-time ms - :remote-addr - :remote-user', { stream: accessLogStream }));
+//app.use(morgan('[:date[iso]] :method :url :status :res[content-length] - :response-time ms - :remote-addr - :remote-user', { stream: accessLogStream }));
 // Stream option for morgan to log using winston
 const morganStream = {
     write: (message) => logger.info(message.trim())  // Use 'info' log level
