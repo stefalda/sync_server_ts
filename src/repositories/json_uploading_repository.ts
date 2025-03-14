@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as fs from 'fs';
+import { logger } from '../helpers/logger';
 const path = require("path");
 
 const TEMP_DIR = process.env.TEMP_UPLOADS || path.join(__dirname, '../..', "temp_uploads"); // Directory for temp files
@@ -43,8 +44,10 @@ export class JSONUploadingRepository {
             // const db = await this.getDB();
             const filePath = path.join(TEMP_DIR, `${args.clientId}.json`);
             const { chunkIndex, data, start, end, chunks } = args.req.body;
-            console.log(`Receiving: ${chunkIndex + 1}/${chunks} - start ${start} - end  ${end}`);
+            logger.info(`Receiving: ${chunkIndex + 1}/${chunks} - start ${start} - end  ${end}`);
             if (chunkIndex == 0) {
+                logger.info(`Deleting file ${filePath} if it exists`);
+
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath);
                 }
@@ -62,6 +65,8 @@ export class JSONUploadingRepository {
 
             // If it's last chunk return the full json...
             if (chunkIndex == chunks - 1) {
+                logger.info(`Last chunk received - parsing data`);
+
                 //await db.query("UPDATE upload_sessions SET status = 'COMPLETED', last_chunk=$2 WHERE clientid = $1", [args.clientId, chunkIndex], { realm: args.realm });
                 const fullJsonString = fs.readFileSync(filePath, 'utf-8');
                 return JSON.parse(fullJsonString);
@@ -72,7 +77,7 @@ export class JSONUploadingRepository {
 
         } catch (err) {
 
-            console.error("❌ Unexpected error:", err);
+            logger.error("❌ Unexpected error:", err);
             // const db = await this.getDB();
             // await db.query("UPDATE upload_sessions SET status = 'FAILED' WHERE clientid = $1", [args.clientId], { realm: args.realm });
             throw err;
@@ -93,10 +98,10 @@ export class JSONUploadingRepository {
 
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-            console.log(`🗑️ Cleanup requested for client ${clientId}`);
+            logger.info(`🗑️ Cleanup requested for client ${clientId}`);
 
         } catch (err) {
-            console.error("❌ Error during cleanup:", err);
+            logger.error("❌ Error during cleanup:", err);
         }
     }
 
@@ -107,7 +112,7 @@ export class JSONUploadingRepository {
             const lastChunk = await db.query("SELECT last_chunk, status FROM upload_sessions WHERE clientid = $1", [clientId], { realm: realm, singleResult: true });
             return { lastChunk };
         } catch (err) {
-            console.error("❌ Error getting lastChunck:", err);
+            logger.error("❌ Error getting lastChunck:", err);
         }
         return { lastChunk: 0 };
     }
@@ -119,7 +124,7 @@ export class JSONUploadingRepository {
             const filePath = path.join(TEMP_DIR, `${clientId}.json`);
 
             if (!fs.existsSync(filePath)) {
-                console.log(`❌ No JSON file found for client ${clientId}`);
+                logger.info(`❌ No JSON file found for client ${clientId}`);
                 return null;
             }
 
@@ -127,13 +132,13 @@ export class JSONUploadingRepository {
             const rawData = fs.readFileSync(filePath, "utf8");
             const jsonData = JSON.parse(rawData);
 
-            console.log(`✅ JSON Parsed for client ${clientId}:`, jsonData);
+            logger.info(`✅ JSON Parsed for client ${clientId}:`, jsonData);
             // Delete
             this.delete(clientId, realm);
             return jsonData;
 
         } catch (err) {
-            console.error("❌ Error parsing JSON file:", err);
+            logger.error("❌ Error parsing JSON file:", err);
             return null;
         }
     };

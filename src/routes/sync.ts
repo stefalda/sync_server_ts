@@ -13,7 +13,7 @@ router.post('/pull/:realm/:clientid', checkToken, async (req: Request, res: Resp
     try {
         const { realm, clientid } = req.params;
 
-        console.log(`🔄 Receiving data from client: ${clientid} in realm: ${realm}`);
+        logger.info(`🔄 PULL - Receiving data from client: ${clientid} in realm: ${realm}`);
 
         // Process in chunks incoming data
         // ✅ Ensure Express waits for the JSON processing to finish
@@ -43,6 +43,7 @@ router.post('/pull/:realm/:clientid', checkToken, async (req: Request, res: Resp
 router.post('/push/:realm/:clientid', checkToken, async (req: Request, res) => {
     try {
         const { realm, clientid } = req.params;
+        logger.info(`🔄 PUSH - Receiving data from client: ${clientid} in realm: ${realm}`);
         //const data =  req.body;
         const data = await jsonRepo.processChunk({ clientId: clientid, realm: realm, req, res });
         if (!data) {
