@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 //import * as lockfile from 'proper-lockfile'; // Avrai bisogno di questa dipendenza
-import * as JSONStream from 'jsonstream';
 import { logger } from '../helpers/logger';
 
 type ChunkProcessorResult = {
@@ -127,7 +126,7 @@ class ChunkProcessor {
 
             // Delete the uploaded file
             //await fs.unlinkSync(filePath);
-            logger.info("Return parsed file data");
+            logger.info("Return parsed file data ");
 
             return parsedObj;
         } catch (error) {
@@ -137,16 +136,18 @@ class ChunkProcessor {
 
     }
 
-    private async streamJsonFile(filePath: string): Promise<any[]> {
-        return new Promise<any[]>((resolve, reject) => {
+    private async streamJsonFile(filePath: string): Promise<any> {
+        return new Promise<any>((resolve, reject) => {
+            const jsonStream = require('JSONStream');
             const fs = require('fs');
 
-            const result: any[] = [];
+            let result = {}; // Inizializziamo un oggetto vuoto invece di un array
             const stream = fs.createReadStream(filePath, { encoding: 'utf8' })
-                .pipe(JSONStream.parse('*')) // Analizza ogni elemento dell'array JSON senza caricare tutto in memoria
+                .pipe(jsonStream.parse()) // Senza '*' per ottenere l'intero oggetto
 
-            stream.on('data', (item) => {
-                result.push(item);
+            stream.on('data', (obj) => {
+                // Poiché stiamo leggendo l'oggetto completo, assegniamo direttamente
+                result = obj;
             });
 
             stream.on('end', async () => {
