@@ -16,3 +16,6 @@ database*.sql
 docker*
 readMe.md
 source.md
+data
+temp_uploads
+.github

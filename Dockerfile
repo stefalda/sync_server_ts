@@ -1,4 +1,4 @@
-FROM node:18 AS build
+FROM node:23-alpine3.21 AS build
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN rm -r node_modules
 
 RUN npm install --omit=dev 
 
-FROM node:18-alpine
+FROM node:23-alpine3.21
 
 COPY --from=build /app /app
 
