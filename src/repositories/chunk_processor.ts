@@ -4,12 +4,8 @@ import * as fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 //import * as lockfile from 'proper-lockfile'; // Avrai bisogno di questa dipendenza
+import * as JSONStream from 'jsonstream';
 import { logger } from '../helpers/logger';
-
-import { promisify } from 'util';
-
-const unlinkAsync = promisify(fs.unlink);
-const rmAsync = promisify(fs.rm);
 
 type ChunkProcessorResult = {
     status: string;
@@ -143,12 +139,11 @@ class ChunkProcessor {
 
     private async streamJsonFile(filePath: string): Promise<any[]> {
         return new Promise<any[]>((resolve, reject) => {
-            const jsonStream = require('JSONStream');
             const fs = require('fs');
 
             const result: any[] = [];
             const stream = fs.createReadStream(filePath, { encoding: 'utf8' })
-                .pipe(jsonStream.parse('*')) // Analizza ogni elemento dell'array JSON senza caricare tutto in memoria
+                .pipe(JSONStream.parse('*')) // Analizza ogni elemento dell'array JSON senza caricare tutto in memoria
 
             stream.on('data', (item) => {
                 result.push(item);
