@@ -6,10 +6,8 @@ import * as path from 'path';
 //import * as lockfile from 'proper-lockfile'; // Avrai bisogno di questa dipendenza
 import { logger } from '../helpers/logger';
 
+import * as JSONStream from 'jsonstream';
 import { promisify } from 'util';
-import { pipeline } from 'stream/promises';
-import { parser } from 'stream-json';
-import { streamValues } from 'stream-json/streamers/StreamValues';
 
 const unlinkAsync = promisify(fs.unlink);
 const rmAsync = promisify(fs.rm);
@@ -73,9 +71,8 @@ class ChunkProcessor {
                 logger.info(`All chunks received - assembling file`);
                 // Rename the folder
                 fs.renameSync(chunkDirPath, chunkDirPath + "_completed");
-                // Usa un lock per evitare problemi di concorrenza durante l'assemblaggio
-                //const release = await lockfile.lock(filePath, { retries: 5 });
-                return await this.assembleFile(filePath, chunkDirPath + "_completed", chunkFiles);
+
+                return (await this.assembleFile(filePath, chunkDirPath + "_completed", chunkFiles)) as any;
 
             }
 
@@ -91,7 +88,7 @@ class ChunkProcessor {
         }
     }
 
-    private async assembleFile2(filePath: string, chunkDirPath: string, chunkFiles: Array<string>): Promise<any> {
+    private async assembleFile(filePath: string, chunkDirPath: string, chunkFiles: Array<string>): Promise<any> {
         try {
             const fileStream = fs.createWriteStream(filePath);
 
@@ -122,12 +119,17 @@ class ChunkProcessor {
             await Promise.all(chunkFiles.map(chunkFile => fsPromises.unlink(path.join(chunkDirPath, chunkFile))));
             await fsPromises.rm(chunkDirPath, { recursive: true, force: true });
 
+            logger.info("Completed file written to disk");
+
             // Read and return the final assembled file
             const fullJsonString = await fsPromises.readFile(filePath, 'utf-8');
             // Delete the uploaded file
             await fs.unlinkSync(filePath);
             // Return the json data
-            return JSON.parse(fullJsonString);
+            logger.info("JSON String loaded in memory... now I'll parse it");
+            const parsedObj = JSON.parse(fullJsonString);
+            logger.info("JSON Object parsed and loaded in memory");
+            return parsedObj;
         } catch (error) {
             logger.error("Error assembling file:", error);
             throw error;
@@ -136,54 +138,6 @@ class ChunkProcessor {
     }
 
 
-    private async assembleFile(filePath: string, chunkDirPath: string, chunkFiles: string[]): Promise<any> {
-        try {
-            const fileStream = fs.createWriteStream(filePath);
-    
-            // Sort chunks numerically
-            const sortedChunks = chunkFiles
-                .filter(file => file.startsWith('chunk_'))
-                .sort((a, b) => parseInt(a.replace('chunk_', '')) - parseInt(b.replace('chunk_', '')));
-    
-            // Stream chunks into the final file
-            for (const chunkFile of sortedChunks) {
-                const chunkPath = path.join(chunkDirPath, chunkFile);
-                await pipeline(fs.createReadStream(chunkPath), fileStream);
-            }
-    
-            // Close the file stream
-            await new Promise<void>((resolve, reject) => {
-                fileStream.end();
-                fileStream.on('finish', resolve);
-                fileStream.on('error', reject);
-            });
-    
-            // Delete chunk files concurrently
-            await Promise.all(chunkFiles.map(chunkFile => unlinkAsync(path.join(chunkDirPath, chunkFile))));
-            await rmAsync(chunkDirPath, { recursive: true, force: true });
-    
-            // **Stream JSON parsing instead of loading it all into memory**
-            return new Promise<any>((resolve, reject) => {
-                const jsonStream = fs.createReadStream(filePath, 'utf-8').pipe(parser()).pipe(streamValues());
-                const jsonArray: any[] = [];
-    
-                jsonStream.on('data', ({ value }) => {
-                    jsonArray.push(value); // Add values to the array as they stream in
-                });
-    
-                jsonStream.on('end', async () => {
-                    await unlinkAsync(filePath); // Delete file after processing
-                    resolve(jsonArray); // Resolve with the streamed JSON
-                });
-    
-                jsonStream.on('error', reject);
-            });
-    
-        } catch (error) {
-            logger.error("Error assembling file:", error);
-            throw error;
-        }
-    }
 
 
     private async computeTotalSize(directoryPath: string): Promise<number> {
@@ -215,6 +169,84 @@ class ChunkProcessor {
         } finally {
             await fileHandle.close(); // Close the file
         }
+    }
+
+    private async assembleFile2(filePath: string, chunkDirPath: string, chunkFiles: string[]): Promise<any[]> {
+        try {
+            const fileStream = fs.createWriteStream(filePath, { flags: 'w' });
+            // Ordina i chunk numericamente
+            const sortedChunks = chunkFiles
+                .filter(file => file.startsWith('chunk_'))
+                .sort((a, b) => parseInt(a.replace('chunk_', '')) - parseInt(b.replace('chunk_', '')));
+
+            // Unisci i chunk nel file finale usando lo streaming
+            for (const chunkFile of sortedChunks) {
+                const chunkPath = path.join(chunkDirPath, chunkFile);
+                const readStream = fs.createReadStream(chunkPath);
+                // Usa pipeline per gestire il backpressure
+                await new Promise<void>((resolve, reject) => {
+                    readStream.pipe(fileStream, { end: false }) // Importante: non chiudere il fileStream dopo ogni chunk
+                        .on('error', reject)
+                        .on('finish', resolve);
+                });
+            }
+
+            // Importante: chiude manualmente il fileStream dopo aver scritto tutti i chunk
+            fileStream.end();
+
+            // Attendi la chiusura del fileStream
+            await new Promise<void>((resolve, reject) => {
+                fileStream.on('finish', () => {
+                    console.log("FileStream closed successfully");
+                    resolve();
+                });
+                fileStream.on('error', (err) => {
+                    console.error("Error closing FileStream", err);
+                    reject(err);
+                });
+            });
+
+            // Cancella i chunk dopo averli usati
+            await Promise.all(sortedChunks.map(chunkFile =>
+                fs.promises.unlink(path.join(chunkDirPath, chunkFile))
+                    .catch(err => console.warn(`Failed to delete chunk ${chunkFile}:`, err))
+            ));
+
+            // Elimina la directory dei chunk
+            await fs.promises.rm(chunkDirPath, { recursive: true, force: true })
+                .catch(err => console.warn(`Failed to delete chunk directory:`, err));
+
+            // Processa il JSON in streaming senza caricarlo tutto in memoria
+            return await this.streamJsonFile(filePath);
+        } catch (error) {
+            logger.error("Error assembling file:", error);
+            throw error;
+        }
+    }
+
+    // Metodo separato per lo streaming JSON con gestione corretta del back-pressure
+    private async streamJsonFile(filePath: string): Promise<any[]> {
+        return new Promise<any[]>((resolve, reject) => {
+            const result: any[] = [];
+            const jsonStream = fs.createReadStream(filePath, 'utf-8')
+                .pipe(JSONStream.parse('*')) // Usa JSONStream per parsare il JSON in streaming
+                .on('data', (item) => {
+                    result.push(item);
+                })
+                .on('end', async () => {
+                    try {
+                        // Elimina il file dopo averlo processato
+                        await fs.promises.unlink(filePath);
+                        resolve(result);
+                    } catch (err) {
+                        console.warn(`Failed to delete assembled file:`, err);
+                        resolve(result); // Risolve comunque anche se la cancellazione fallisce
+                    }
+                })
+                .on('error', (err) => {
+                    reject(err);
+                });
+        });
     }
 }
 

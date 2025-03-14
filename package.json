@@ -27,10 +27,12 @@
     "typescript": "^5.5.4"
   },
   "dependencies": {
+    "@types/jsonstream": "^0.8.33",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "handlebars": "^4.7.8",
+    "jsonstream": "^1.0.3",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "nodemailer": "^6.9.15",
