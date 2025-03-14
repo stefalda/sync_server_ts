@@ -126,8 +126,8 @@ class ChunkProcessor {
             logger.info("JSON Object parsed and loaded in memory");
 
             // Delete the uploaded file
-            await fs.unlinkSync(filePath);
-            logger.info("Delete parsed file");
+            //await fs.unlinkSync(filePath);
+            logger.info("Return parsed file data");
 
             return parsedObj;
         } catch (error) {
