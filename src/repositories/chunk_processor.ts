@@ -7,6 +7,9 @@ import * as path from 'path';
 import { logger } from '../helpers/logger';
 
 import { promisify } from 'util';
+import { pipeline } from 'stream/promises';
+import { parser } from 'stream-json';
+import { streamValues } from 'stream-json/streamers/StreamValues';
 
 const unlinkAsync = promisify(fs.unlink);
 const rmAsync = promisify(fs.rm);
@@ -136,50 +139,46 @@ class ChunkProcessor {
     private async assembleFile(filePath: string, chunkDirPath: string, chunkFiles: string[]): Promise<any> {
         try {
             const fileStream = fs.createWriteStream(filePath);
-
+    
             // Sort chunks numerically
             const sortedChunks = chunkFiles
                 .filter(file => file.startsWith('chunk_'))
                 .sort((a, b) => parseInt(a.replace('chunk_', '')) - parseInt(b.replace('chunk_', '')));
-
-            // Pipe chunks into the final file (avoids loading everything in memory)
+    
+            // Stream chunks into the final file
             for (const chunkFile of sortedChunks) {
                 const chunkPath = path.join(chunkDirPath, chunkFile);
-                await new Promise<void>((resolve, reject) => {
-                    const readStream = fs.createReadStream(chunkPath);
-                    readStream.pipe(fileStream, { end: false });
-                    readStream.on('end', resolve);
-                    readStream.on('error', reject);
-                });
+                await pipeline(fs.createReadStream(chunkPath), fileStream);
             }
-
+    
             // Close the file stream
             await new Promise<void>((resolve, reject) => {
                 fileStream.end();
                 fileStream.on('finish', resolve);
                 fileStream.on('error', reject);
             });
-
+    
             // Delete chunk files concurrently
             await Promise.all(chunkFiles.map(chunkFile => unlinkAsync(path.join(chunkDirPath, chunkFile))));
             await rmAsync(chunkDirPath, { recursive: true, force: true });
-
-            // Instead of loading the full file into memory, stream its content
+    
+            // **Stream JSON parsing instead of loading it all into memory**
             return new Promise<any>((resolve, reject) => {
-                let jsonString = '';
-                const readStream = fs.createReadStream(filePath, 'utf-8');
-                readStream.on('data', chunk => jsonString += chunk);
-                readStream.on('end', async () => {
-                    try {
-                        await unlinkAsync(filePath); // Delete final file after reading
-                        resolve(JSON.parse(jsonString));
-                    } catch (error) {
-                        reject(error);
-                    }
+                const jsonStream = fs.createReadStream(filePath, 'utf-8').pipe(parser()).pipe(streamValues());
+                const jsonArray: any[] = [];
+    
+                jsonStream.on('data', ({ value }) => {
+                    jsonArray.push(value); // Add values to the array as they stream in
                 });
-                readStream.on('error', reject);
+    
+                jsonStream.on('end', async () => {
+                    await unlinkAsync(filePath); // Delete file after processing
+                    resolve(jsonArray); // Resolve with the streamed JSON
+                });
+    
+                jsonStream.on('error', reject);
             });
-
+    
         } catch (error) {
             logger.error("Error assembling file:", error);
             throw error;

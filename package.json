@@ -35,6 +35,7 @@
     "morgan": "^1.10.0",
     "nodemailer": "^6.9.15",
     "pg": "^8.12.0",
+    "stream-json": "^1.9.1",
     "winston": "^3.14.2",
     "winston-daily-rotate-file": "^5.0.0"
   }
