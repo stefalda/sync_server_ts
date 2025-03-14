@@ -6,7 +6,6 @@ import * as path from 'path';
 //import * as lockfile from 'proper-lockfile'; // Avrai bisogno di questa dipendenza
 import { logger } from '../helpers/logger';
 
-import * as JSONStream from 'jsonstream';
 import { promisify } from 'util';
 
 const unlinkAsync = promisify(fs.unlink);
@@ -122,13 +121,18 @@ class ChunkProcessor {
             logger.info("Completed file written to disk");
 
             // Read and return the final assembled file
-            const fullJsonString = await fsPromises.readFile(filePath, 'utf-8');
+            //const fullJsonString = await fsPromises.readFile(filePath, 'utf-8');
+            // Return the json data
+            //logger.info("JSON String loaded in memory... now I'll parse it");
+
+            // const parsedObj = JSON.parse(fullJsonString);
+            const parsedObj = await this.streamJsonFile(filePath);
+            logger.info("JSON Object parsed and loaded in memory");
+
             // Delete the uploaded file
             await fs.unlinkSync(filePath);
-            // Return the json data
-            logger.info("JSON String loaded in memory... now I'll parse it");
-            const parsedObj = JSON.parse(fullJsonString);
-            logger.info("JSON Object parsed and loaded in memory");
+            logger.info("Delete parsed file");
+
             return parsedObj;
         } catch (error) {
             logger.error("Error assembling file:", error);
@@ -137,6 +141,34 @@ class ChunkProcessor {
 
     }
 
+    private async streamJsonFile(filePath: string): Promise<any[]> {
+        return new Promise<any[]>((resolve, reject) => {
+            const jsonStream = require('JSONStream');
+            const fs = require('fs');
+
+            const result: any[] = [];
+            const stream = fs.createReadStream(filePath, { encoding: 'utf8' })
+                .pipe(jsonStream.parse('*')) // Analizza ogni elemento dell'array JSON senza caricare tutto in memoria
+
+            stream.on('data', (item) => {
+                result.push(item);
+            });
+
+            stream.on('end', async () => {
+                try {
+                    await fs.promises.unlink(filePath); // Elimina il file dopo averlo processato
+                    resolve(result);
+                } catch (err) {
+                    console.warn('Failed to delete file:', err);
+                    resolve(result); // Risolvi comunque anche se la cancellazione fallisce
+                }
+            });
+
+            stream.on('error', (err) => {
+                reject(err);
+            });
+        });
+    }
 
 
 
@@ -171,83 +203,6 @@ class ChunkProcessor {
         }
     }
 
-    private async assembleFile2(filePath: string, chunkDirPath: string, chunkFiles: string[]): Promise<any[]> {
-        try {
-            const fileStream = fs.createWriteStream(filePath, { flags: 'w' });
-            // Ordina i chunk numericamente
-            const sortedChunks = chunkFiles
-                .filter(file => file.startsWith('chunk_'))
-                .sort((a, b) => parseInt(a.replace('chunk_', '')) - parseInt(b.replace('chunk_', '')));
-
-            // Unisci i chunk nel file finale usando lo streaming
-            for (const chunkFile of sortedChunks) {
-                const chunkPath = path.join(chunkDirPath, chunkFile);
-                const readStream = fs.createReadStream(chunkPath);
-                // Usa pipeline per gestire il backpressure
-                await new Promise<void>((resolve, reject) => {
-                    readStream.pipe(fileStream, { end: false }) // Importante: non chiudere il fileStream dopo ogni chunk
-                        .on('error', reject)
-                        .on('finish', resolve);
-                });
-            }
-
-            // Importante: chiude manualmente il fileStream dopo aver scritto tutti i chunk
-            fileStream.end();
-
-            // Attendi la chiusura del fileStream
-            await new Promise<void>((resolve, reject) => {
-                fileStream.on('finish', () => {
-                    console.log("FileStream closed successfully");
-                    resolve();
-                });
-                fileStream.on('error', (err) => {
-                    console.error("Error closing FileStream", err);
-                    reject(err);
-                });
-            });
-
-            // Cancella i chunk dopo averli usati
-            await Promise.all(sortedChunks.map(chunkFile =>
-                fs.promises.unlink(path.join(chunkDirPath, chunkFile))
-                    .catch(err => console.warn(`Failed to delete chunk ${chunkFile}:`, err))
-            ));
-
-            // Elimina la directory dei chunk
-            await fs.promises.rm(chunkDirPath, { recursive: true, force: true })
-                .catch(err => console.warn(`Failed to delete chunk directory:`, err));
-
-            // Processa il JSON in streaming senza caricarlo tutto in memoria
-            return await this.streamJsonFile(filePath);
-        } catch (error) {
-            logger.error("Error assembling file:", error);
-            throw error;
-        }
-    }
-
-    // Metodo separato per lo streaming JSON con gestione corretta del back-pressure
-    private async streamJsonFile(filePath: string): Promise<any[]> {
-        return new Promise<any[]>((resolve, reject) => {
-            const result: any[] = [];
-            const jsonStream = fs.createReadStream(filePath, 'utf-8')
-                .pipe(JSONStream.parse('*')) // Usa JSONStream per parsare il JSON in streaming
-                .on('data', (item) => {
-                    result.push(item);
-                })
-                .on('end', async () => {
-                    try {
-                        // Elimina il file dopo averlo processato
-                        await fs.promises.unlink(filePath);
-                        resolve(result);
-                    } catch (err) {
-                        console.warn(`Failed to delete assembled file:`, err);
-                        resolve(result); // Risolve comunque anche se la cancellazione fallisce
-                    }
-                })
-                .on('error', (err) => {
-                    reject(err);
-                });
-        });
-    }
 }
 
 
