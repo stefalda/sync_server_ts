@@ -125,8 +125,12 @@ export class SyncRepository {
 
             // Update Client Last Sync Date and delete syncing date
             userClient.lastsync = new Date().getTime();
-            userClient.syncing = null;
+            // Only if the data is not partial turn off the sync in progress flag        
+            if (syncDataRequest.isPartial === 0) {
+                userClient.syncing = null;
+            }
             await UserRepository.getInstance().setUserClient(realm, userClient);
+
             return new SyncDataPushResponse(userClient.lastsync!);
         }
         catch (ex) {

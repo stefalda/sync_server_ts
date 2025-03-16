@@ -3,50 +3,43 @@ import { logger } from '../helpers/logger';
 import { checkToken } from '../middleware/authorization';
 import { SyncDataRequest } from '../models/api/sync_data';
 import chunk_processor from '../repositories/chunk_processor';
-import { JSONUploadingRepository } from '../repositories/json_uploading_repository';
 import { SyncRepository } from '../repositories/sync_repository';
 const router = Router();
-const jsonRepo = new JSONUploadingRepository();
+
 /**
  * Pull the changes stored in the sync server
  */
 router.post('/pull/:realm/:clientid', checkToken, async (req: Request, res: Response) => {
     try {
         const { realm, clientid } = req.params;
-
         logger.info(`🔄 PULL - Receiving data from client: ${clientid} in realm: ${realm}`);
-        ////////////////////////
-        /// CONCURRENT UPLOADS//
-        ////////////////////////
-        const resultChunk = await chunk_processor.processChunk({
-            clientId: clientid,
-            realm: realm,
-            req,
-            res
-        });
-        if (resultChunk.status === 'IN_PROGRESS') {
-            // Se è in progress, invia lo stato di avanzamento
-            res.status(206).send({
-                message: "Please send next chunk",
-                progress: resultChunk.progress,
-                percentage: resultChunk.percentage
+        let data;
+        if (req.body.multiple) {
+            //////////////////////////////////////
+            /// CONCURRENT UPLOADS FOR BIG FILES//
+            //////////////////////////////////////
+            const resultChunk = await chunk_processor.processChunk({
+                clientId: clientid,
+                realm: realm,
+                req,
+                res
             });
-            return;
+            if (resultChunk.status === 'IN_PROGRESS') {
+                // Se è in progress, invia lo stato di avanzamento
+                res.status(206).send({
+                    message: "Please send next chunk",
+                    progress: resultChunk.progress,
+                    percentage: resultChunk.percentage
+                });
+                return;
+            }
+            // It's completed... the complete chunk is here
+            data = resultChunk as unknown;
         }
-        // It's completed... the complete chunk is here
-        const data = resultChunk as unknown;
-        /*
-        // Process in chunks incoming data
-        // ✅ Ensure Express waits for the JSON processing to finish
-        const data = await jsonRepo.processChunk({ clientId: clientid, realm: realm, req, res });
-
-        if (!data) {
-            // We are not yet finished receiving the  data
-            res.status(200).send({ message: "Please send next chunk" });
-            return;
+        else {
+            // Standard upload of a single file
+            data = req.body;
         }
-        */
-
 
         const syncData = data as SyncDataRequest;
 
@@ -65,35 +58,32 @@ router.post('/push/:realm/:clientid', checkToken, async (req: Request, res) => {
     try {
         const { realm, clientid } = req.params;
         logger.info(`🔄 PUSH - Receiving data from client: ${clientid} in realm: ${realm}`);
-
-
-
-        const resultChunk = await chunk_processor.processChunk({
-            clientId: clientid,
-            realm: realm,
-            req,
-            res
-        });
-
-        if (resultChunk.status === 'IN_PROGRESS') {
-            // Se è in progress, invia lo stato di avanzamento
-            res.status(200).send({
-                message: "Please send next chunk",
-                progress: resultChunk.progress,
-                percentage: resultChunk.percentage
+        let data;
+        // Multiple concurrent upload for big files
+        if (req.body.multiple) {
+            const resultChunk = await chunk_processor.processChunk({
+                clientId: clientid,
+                realm: realm,
+                req,
+                res
             });
-            return;
+
+            if (resultChunk.status === 'IN_PROGRESS') {
+                // Se è in progress, invia lo stato di avanzamento
+                res.status(200).send({
+                    message: "Please send next chunk",
+                    progress: resultChunk.progress,
+                    percentage: resultChunk.percentage
+                });
+                return;
+            }
+            // It's completed... the complete chunk is here
+            data = resultChunk as unknown;
         }
-        // It's completed... the complete chunk is here
-        const data = resultChunk as unknown;
-
-
-        //const data =  req.body;
-        // const data = await jsonRepo.processChunk({ clientId: clientid, realm: realm, req, res });
-        // if (!data) {
-        //     res.status(200).send({ message: "Please send next chunk" });
-        //     return;
-        // }
+        else {
+            // Simple upload
+            data = req.body;
+        }
         const syncData = data as SyncDataRequest;
         const result = await SyncRepository.getInstance().push(req.params.realm, syncData);
         res.json(result);

@@ -1,6 +1,7 @@
 export interface SyncDataRequest {
     clientId: string;
     lastSync: number,
+    isPartial: number,
     changes: Array<SyncData>
 }
 
