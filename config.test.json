@@ -1,0 +1,24 @@
+{
+    "server": {
+        "port": 8076,
+        "authentication": "jwt",
+        "secret_key": "TEST_JWT_SECRET_KEY",
+        "secret_key_refresh": "TEST_JWT_SECRET_KEY2"
+    },
+    "db": {
+        "realms": {
+            "todo_test": "postgresql://postgres:postgress@localhost:5433/sync_server_test"
+        }
+    },
+    "email": {
+        "from": "Test",
+        "fromEmail": "test@test.com",
+        "smtp": "smtp.test.com",
+        "port": "587",
+        "username": "test",
+        "password": "test",
+        "apps": {
+            "todo_test": "Test App"
+        }
+    }
+}

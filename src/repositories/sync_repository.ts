@@ -16,6 +16,10 @@ export class SyncRepository {
         return SyncRepository.instance;
     }
 
+    public static reset(): void {
+        SyncRepository.instance = null as unknown as SyncRepository;
+    }
+
     // Instance methods
 
     private async getDB() {

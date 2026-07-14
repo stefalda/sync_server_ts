@@ -22,6 +22,10 @@ export class UserRepository {
         return UserRepository.instance;
     }
 
+    public static reset(): void {
+        UserRepository.instance = null as unknown as UserRepository;
+    }
+
     // Instance methods
 
     private async getDB() {

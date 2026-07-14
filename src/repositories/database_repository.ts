@@ -45,6 +45,16 @@ export class DatabaseRepository {
         return DatabaseRepository.instance;
     }
 
+    public static reset(): void {
+        if (DatabaseRepository.instance) {
+            DatabaseRepository.instance.pools.forEach((pool) => {
+                pool.end().catch(() => {});
+            });
+            DatabaseRepository.instance.pools.clear();
+        }
+        DatabaseRepository.instance = null as unknown as DatabaseRepository;
+    }
+
     /// Instance method
 
     /**

@@ -15,6 +15,10 @@ export class AuthenticationRepository {
         return AuthenticationRepository.instance;
     }
 
+    public static reset(): void {
+        AuthenticationRepository.instance = null as unknown as AuthenticationRepository;
+    }
+
     // Instance methods
     private async getDB() {
         return await DatabaseRepository.getInstance();
