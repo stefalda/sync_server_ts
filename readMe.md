@@ -25,7 +25,7 @@ In the root of the project, two scripts are available to create the Postgres and
 
 ## Docker
 
-The application is available as a Docker image on Docker Hub:
+The application is available as a Docker image on [Docker Hub](https://hub.docker.com/r/sfalda/sync_server):
 
 ```bash
 docker pull sfalda/sync_server:latest
