@@ -287,7 +287,7 @@ The project uses **GitHub Actions** for continuous integration. The CI workflow:
 4. **Runs the full test suite** (`npm test`) against the service container database.
 5. **Builds the project** (`npm run build`).
 
-The CI configuration is at `.github/workflows/`. Tests run in parallel across multiple Node.js versions if configured.
+The CI configuration is at `.github/workflows/ci.yml`. Tests run against a PostgreSQL service container on port 5433 (matching the test configuration in `config.test.json`). Lint warnings do not block the pipeline.
 
 ## Health Check
 
