@@ -53,7 +53,7 @@ router.post('/unregister/:realm', checkToken, async (req: Request, res: Response
  */
 router.post('/login/:realm', checkBasicAuthentication, async (req: Request, res: Response) => {
     try {
-        const user: User = (req as any).user;
+        const user = req.user!;
         const realm = req.params.realm;
         const { clientId } = req.body as LoginData;
         // Check that the clientId
@@ -95,20 +95,22 @@ router.post('/login/:realm/refreshToken', async (req: Request, res: Response) =>
             userToken = await AuthenticationRepository.getInstance().generateToken(realm, userToken.clientid!);
             res.json(tokenFromUserToken(userToken));
         } else {
-            // JWT Token
-            // Verify JWT token
+            // JWT refresh token verification:
+            // 1) Uses secret_key_refresh (previously used secret_key — the wrong key,
+            //    so verification always failed and no refresh token ever worked).
+            // 2) Uses synchronous try/catch instead of callback (previously the callback
+            //    race allowed the code to proceed even when the token was invalid).
             const jwt = require('jsonwebtoken');
-            let userid, email = null;
-            jwt.verify(refreshToken, configJson.server.secret_key, (err, decoded) => {
-                if (err) {
-                    return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
-                }
-                email = decoded.email;
-                userid = decoded.userid;
-            });
-            // Something went wrong...
-            if (res.statusCode === 403) return;
-            const user = await UserRepository.getInstance().getUserFromDB(realm, email);
+            let decoded: { userid: string; email: string } | null = null;
+            try {
+                decoded = jwt.verify(refreshToken, configJson.server.secret_key_refresh) as { userid: string; email: string };
+            } catch {
+                return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
+            }
+            if (!decoded) {
+                return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
+            }
+            const user = await UserRepository.getInstance().getUserFromDB(realm, decoded.email);
             if (!user) {
                 return res.status(403).json(new ApiResult(403, "User not found, please relogin"));
             }
@@ -136,7 +138,8 @@ function tokenFromUserToken(userToken: UserToken) {
         access_token: userToken.token,
         refresh_token: userToken.refreshtoken,
         expires_in: 86400, // 24h
-        expires_on: new Date(userToken.lastrefresh! + 60 * 60 * 24 * 1000).getTime()
+        // Null-safe: falls back to 0 if lastrefresh is undefined (non-null assertion removed)
+        expires_on: new Date((userToken.lastrefresh ?? 0) + 60 * 60 * 24 * 1000).getTime()
     };
 }
 
@@ -150,10 +153,13 @@ router.post('/password/:realm/forgotten', async (req: Request, res: Response) =>
     try {
         const { email } = req.body as { email: string };
         await UserRepository.getInstance().generatePin(req.params.realm, email);
-        res.json(new ApiResult(200, "PIN generated and email sent!"));
+        // Always return 200 with a generic message regardless of whether the email exists.
+        // Previously threw "User not found!" → returned 500, allowing email enumeration
+        // by observing 200 (registered) vs 500 (unregistered).
+        res.json(new ApiResult(200, "If the email is registered, a PIN has been sent"));
     } catch (err) {
         logger.error(err);
-        res.status(500).send({ error: 'Error registering user: ' + err });
+        res.json(new ApiResult(200, "If the email is registered, a PIN has been sent"));
     }
 });
 

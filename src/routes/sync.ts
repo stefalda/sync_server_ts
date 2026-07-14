@@ -6,44 +6,50 @@ import chunk_processor from '../repositories/chunk_processor';
 import { SyncRepository } from '../repositories/sync_repository';
 const router = Router();
 
+// Extracted from push/pull handlers: processes chunk upload for both endpoints.
+// The only difference between push and pull is the HTTP status code for IN_PROGRESS:
+// pull → 206, push → 200.
+async function processSyncChunk(
+    req: Request,
+    res: Response,
+    clientid: string,
+    realm: string,
+    inProgressStatus: number
+): Promise<SyncDataRequest | null> {
+    const resultChunk = await chunk_processor.processChunk({
+        clientId: clientid,
+        realm,
+        req,
+        res
+    });
+    if (resultChunk.status === 'IN_PROGRESS') {
+        res.status(inProgressStatus).send({
+            message: "Please send next chunk",
+            progress: resultChunk.progress,
+            percentage: resultChunk.percentage
+        });
+        return null;
+    }
+    return resultChunk as unknown as SyncDataRequest;
+}
+
 /**
  * Pull the changes stored in the sync server
  */
 router.post('/pull/:realm/:clientid', checkToken, async (req: Request, res: Response) => {
     try {
         const { realm, clientid } = req.params;
-        logger.info(`🔄 PULL - Receiving data from client: ${clientid} in realm: ${realm}`);
-        let data;
+        logger.info(`PULL - Receiving data from client: ${clientid} in realm: ${realm}`);
+        let data: SyncDataRequest | null = null;
         if (req.body.multiple) {
-            //////////////////////////////////////
-            /// CONCURRENT UPLOADS FOR BIG FILES//
-            //////////////////////////////////////
-            const resultChunk = await chunk_processor.processChunk({
-                clientId: clientid,
-                realm: realm,
-                req,
-                res
-            });
-            if (resultChunk.status === 'IN_PROGRESS') {
-                // Se è in progress, invia lo stato di avanzamento
-                res.status(206).send({
-                    message: "Please send next chunk",
-                    progress: resultChunk.progress,
-                    percentage: resultChunk.percentage
-                });
-                return;
-            }
-            // It's completed... the complete chunk is here
-            data = resultChunk as unknown;
+            data = await processSyncChunk(req, res, clientid, realm, 206);
+            if (data === null) return;
         }
         else {
-            // Standard upload of a single file
-            data = req.body;
+            data = req.body as SyncDataRequest;
         }
 
-        const syncData = data as SyncDataRequest;
-
-        const result = await SyncRepository.getInstance().pull(req.params.realm, syncData);
+        const result = await SyncRepository.getInstance().pull(realm, data);
         res.json(result);
     } catch (err) {
         logger.error(err);
@@ -57,35 +63,16 @@ router.post('/pull/:realm/:clientid', checkToken, async (req: Request, res: Resp
 router.post('/push/:realm/:clientid', checkToken, async (req: Request, res) => {
     try {
         const { realm, clientid } = req.params;
-        logger.info(`🔄 PUSH - Receiving data from client: ${clientid} in realm: ${realm}`);
-        let data;
-        // Multiple concurrent upload for big files
+        logger.info(`PUSH - Receiving data from client: ${clientid} in realm: ${realm}`);
+        let data: SyncDataRequest | null = null;
         if (req.body.multiple) {
-            const resultChunk = await chunk_processor.processChunk({
-                clientId: clientid,
-                realm: realm,
-                req,
-                res
-            });
-
-            if (resultChunk.status === 'IN_PROGRESS') {
-                // Se è in progress, invia lo stato di avanzamento
-                res.status(200).send({
-                    message: "Please send next chunk",
-                    progress: resultChunk.progress,
-                    percentage: resultChunk.percentage
-                });
-                return;
-            }
-            // It's completed... the complete chunk is here
-            data = resultChunk as unknown;
+            data = await processSyncChunk(req, res, clientid, realm, 200);
+            if (data === null) return;
         }
         else {
-            // Simple upload
-            data = req.body;
+            data = req.body as SyncDataRequest;
         }
-        const syncData = data as SyncDataRequest;
-        const result = await SyncRepository.getInstance().push(req.params.realm, syncData);
+        const result = await SyncRepository.getInstance().push(realm, data);
         res.json(result);
     } catch (err) {
         logger.error(err);
@@ -93,37 +80,7 @@ router.post('/push/:realm/:clientid', checkToken, async (req: Request, res) => {
     }
 });
 
-// To simplify things at the moment we don't let resume uploads
-/*
-router.get("/pull/:realm/:clientId", async (req, res) => {
-    try {
-        const { realm, clientId } = req.params;
-        const lastChunck = await jsonRepo.getLastChuck(clientId, realm);
-        if (lastChunck == null) {
-            logger.info(`No active upload session found for clientId ${clientId} and realm ${realm}`);
-            return res.status(200).json(0);//{ message: "No active upload session found." });
-        }
-        res.json(lastChunck);
-    } catch (err) {
-        console.error("❌ Error retrieving upload progress:", err);
-        res.status(500).send({ message: err.message });
-    }
-});
-
-router.get("/push/:realm/:clientId", async (req, res) => {
-    try {
-        const { realm, clientId } = req.params;
-        const lastChunck = await jsonRepo.getLastChuck(clientId, realm);
-        if (lastChunck == null) {
-            return res.status(404).json({ message: "No active upload session found." });
-        }
-        res.json(lastChunck);
-    } catch (err) {
-        console.error("❌ Error retrieving upload progress:", err);
-        res.status(500).send({ message: err.message });
-    }
-});
-*/
+// Resume-upload endpoints are not yet implemented.
 
 /**
  * Push the changes to store in the sync server

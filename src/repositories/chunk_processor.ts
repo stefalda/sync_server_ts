@@ -3,17 +3,26 @@ import { Request, Response } from 'express';
 import * as fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import * as path from 'path';
-//import * as lockfile from 'proper-lockfile'; // Avrai bisogno di questa dipendenza
 import { parse } from 'jsonstream';
 import { logger } from '../helpers/logger';
+
 type ChunkProcessorResult = {
     status: string;
     progress: string;
     percentage: number;
 }
 
+// In-memory counter tracking received bytes per syncId.
+// Replaces the O(n²) computeTotalSize loop that called readdir + per-file stat
+// on every chunk. Keyed by syncId, cleaned up on completion or failure.
+const receivedBytesBySyncId = new Map<string, number>();
+
+function isValidId(id: string): boolean {
+    return /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
 class ChunkProcessor {
-    private readonly TEMP_DIR = process.env.TEMP_UPLOADS || path.join(__dirname, '../..', "temp_uploads"); // Directory for temp files
+    private readonly TEMP_DIR = process.env.TEMP_UPLOADS || path.join(__dirname, '../..', "temp_uploads");
     constructor() {
 
         // Assicura che la directory esista
@@ -22,62 +31,99 @@ class ChunkProcessor {
         }
     }
 
+    // Test support: reset internal state
+    public reset(): void {
+        receivedBytesBySyncId.clear();
+    }
+
     async processChunk(args: { clientId: string, realm: string, req: Request, res: Response }): Promise<ChunkProcessorResult> {
         const { chunkIndex, data, start, end, chunks, syncId, totalSize } = args.req.body;
-        const clientPath = path.join(this.TEMP_DIR, `${args.clientId}`);
+
+        // Path traversal protection: validate identifiers against strict pattern
+        if (!isValidId(args.clientId)) {
+            throw new Error(`Invalid clientId: ${args.clientId}`);
+        }
+        if (!isValidId(syncId)) {
+            throw new Error(`Invalid syncId: ${syncId}`);
+        }
+
+        // Path containment: resolve to absolute path and verify it's within TEMP_DIR
+        const resolvedTempDir = path.resolve(this.TEMP_DIR);
+        const clientPath = path.resolve(path.join(resolvedTempDir, args.clientId));
+        if (!clientPath.startsWith(resolvedTempDir)) {
+            throw new Error(`Path traversal detected for clientId: ${args.clientId}`);
+        }
         const filePath = path.join(clientPath, `${args.clientId}_${syncId}.json`);
         const chunkDirPath = path.join(clientPath, `${syncId}_chunks`);
 
         logger.info(`Receiving: ${chunkIndex + 1}/${chunks} - TotalSize: ${totalSize}`);
 
         try {
-            // Crea la directory per i chunk se non esiste
             if (!fs.existsSync(chunkDirPath)) {
                 logger.info(`Initializing upload for client ${args.clientId}`);
-                // Delete all the files in the client path
                 if (await fsPromises.stat(clientPath).catch(() => false)) {
                     await fsPromises.rm(clientPath, { recursive: true, force: true });
                 }
 
                 await fsPromises.mkdir(chunkDirPath, { recursive: true });
 
-                // Cancella il file finale se esiste
                 if (fs.existsSync(filePath)) {
                     await fsPromises.unlink(filePath);
                 }
+
+                // Initialize byte counter when starting a new upload
+                receivedBytesBySyncId.set(syncId, 0);
             }
 
-            // Salva il chunk in un file temporaneo separato
             const chunkTempFilePath = path.join(chunkDirPath, `_chunk_${chunkIndex}.json`);
             const chunkFilePath = path.join(chunkDirPath, `chunk_${chunkIndex}.json`);
-            //await fsPromises.writeFile(chunkFilePath, data, 'utf-8');
             await this.writeFileSafely(chunkTempFilePath, data);
 
-            fs.renameSync(chunkTempFilePath, chunkFilePath);
+            // Async rename instead of blocking fs.renameSync
+            await fsPromises.rename(chunkTempFilePath, chunkFilePath);
 
-            // Verifica se tutti i chunk sono stati ricevuti
+            // Track received bytes in-memory instead of reading all files every chunk
+            const chunkSize = Buffer.byteLength(data, 'utf-8');
+            const currentTotal = (receivedBytesBySyncId.get(syncId) || 0) + chunkSize;
+            receivedBytesBySyncId.set(syncId, currentTotal);
+
             const chunkFiles = await fsPromises.readdir(chunkDirPath);
             const receivedChunks = chunkFiles.filter(file => file.startsWith('chunk_')).length;
 
-            //logger.info(`Progress: ${receivedChunks}/${chunks} chunks received`);
-
-            if (receivedChunks === chunks && fs.existsSync(chunkDirPath) && await this.computeTotalSize(chunkDirPath) === totalSize) {
+            if (receivedChunks === chunks && fs.existsSync(chunkDirPath) && currentTotal === totalSize) {
                 logger.info(`All chunks received - assembling file`);
-                // Rename the folder
-                fs.renameSync(chunkDirPath, chunkDirPath + "_completed");
+                // Atomic lock: try to create a lock directory. Only one request succeeds;
+                // the rest get EEXIST and return IN_PROGRESS so the client retries.
+                const lockDir = chunkDirPath + "_lock";
+                try {
+                    await fsPromises.mkdir(lockDir);
+                } catch {
+                    // Another request already holds the lock and is assembling
+                    return {
+                        status: 'IN_PROGRESS',
+                        progress: `${receivedChunks}/${chunks}`,
+                        percentage: Math.round((receivedChunks / chunks) * 100)
+                    };
+                }
 
-                return (await this.assembleFile(filePath, chunkDirPath + "_completed", chunkFiles)) as any;
-
+                try {
+                    await fsPromises.rename(chunkDirPath, chunkDirPath + "_completed");
+                    const assembledData = await this.assembleFile(filePath, chunkDirPath + "_completed", chunkFiles);
+                    return assembledData as any;
+                } finally {
+                    // Clean up lock and byte counter regardless of success or failure
+                    await fsPromises.rm(lockDir, { recursive: true, force: true }).catch(() => {});
+                    receivedBytesBySyncId.delete(syncId);
+                }
             }
 
-            // Ritorna lo stato di avanzamento se non è l'ultimo chunk
             return {
                 status: 'IN_PROGRESS',
                 progress: `${receivedChunks}/${chunks}`,
                 percentage: Math.round((receivedChunks / chunks) * 100)
             };
         } catch (err) {
-            logger.error(`❌ Error processing chunk ${chunkIndex} for client ${args.clientId}:`, err);
+            logger.error(`Error processing chunk ${chunkIndex} for client ${args.clientId}:`, err);
             throw err;
         }
     }
@@ -86,7 +132,6 @@ class ChunkProcessor {
         try {
             const fileStream = fs.createWriteStream(filePath);
 
-            // Ordina i chunk numericamente
             const sortedChunks = chunkFiles
                 .filter(file => file.startsWith('chunk_'))
                 .sort((a, b) => {
@@ -95,38 +140,25 @@ class ChunkProcessor {
                     return indexA - indexB;
                 });
 
-            // Write all chunks sequentially
             for (const chunkFile of sortedChunks) {
                 const chunkPath = path.join(chunkDirPath, chunkFile);
                 const chunkContent = await fsPromises.readFile(chunkPath);
                 fileStream.write(chunkContent);
             }
 
-            // Close the write stream properly
             await new Promise<void>((resolve, reject) => {
                 fileStream.end();
                 fileStream.on('finish', resolve);
                 fileStream.on('error', reject);
             });
 
-            // Clean up chunk files
             await Promise.all(chunkFiles.map(chunkFile => fsPromises.unlink(path.join(chunkDirPath, chunkFile))));
             await fsPromises.rm(chunkDirPath, { recursive: true, force: true });
 
             logger.info("Completed file written to disk");
 
-            // Read and return the final assembled file
-            //const fullJsonString = await fsPromises.readFile(filePath, 'utf-8');
-            // Return the json data
-            //logger.info("JSON String loaded in memory... now I'll parse it");
-
-            // const parsedObj = JSON.parse(fullJsonString);
             const parsedObj = await this.streamJsonFile(filePath);
             logger.info("JSON Object parsed and loaded in memory");
-
-            // Delete the uploaded file
-            //await fs.unlinkSync(filePath);
-            logger.info("Return parsed file data ");
 
             return parsedObj;
         } catch (error) {
@@ -140,22 +172,21 @@ class ChunkProcessor {
         return new Promise<any>((resolve, reject) => {
             const fs = require('fs');
 
-            let result = {}; // Inizializziamo un oggetto vuoto invece di un array
+            let result = {};
             const stream = fs.createReadStream(filePath, { encoding: 'utf8' })
-                .pipe(parse({})) // Senza '*' per ottenere l'intero oggetto
+                .pipe(parse({}))
 
             stream.on('data', (obj) => {
-                // Poiché stiamo leggendo l'oggetto completo, assegniamo direttamente
                 result = obj;
             });
 
             stream.on('end', async () => {
                 try {
-                    await fs.promises.unlink(filePath); // Elimina il file dopo averlo processato
+                    await fs.promises.unlink(filePath);
                     resolve(result);
                 } catch (err) {
                     console.warn('Failed to delete file:', err);
-                    resolve(result); // Risolvi comunque anche se la cancellazione fallisce
+                    resolve(result);
                 }
             });
 
@@ -165,41 +196,16 @@ class ChunkProcessor {
         });
     }
 
-
-
-    private async computeTotalSize(directoryPath: string): Promise<number> {
-        try {
-            const files = await fsPromises.readdir(directoryPath);
-            let totalSize = 0;
-
-            for (const file of files) {
-                const filePath = path.join(directoryPath, file);
-                const stats = await fsPromises.stat(filePath);
-
-                if (stats.isFile()) {
-                    totalSize += stats.size;
-                }
-            }
-            logger.info("Total size = " + totalSize);
-            return totalSize;
-        } catch (err) {
-            logger.error(`Error reading directory: ${err}`);
-            return 0;
-        }
-    }
-
     async writeFileSafely(filePath: string, data: string) {
-        const fileHandle = await fsPromises.open(filePath, 'w'); // Open file for writing
+        const fileHandle = await fsPromises.open(filePath, 'w');
         try {
-            await fileHandle.writeFile(data, 'utf-8'); // Write data
-            await fileHandle.sync(); // Ensure data is flushed to disk
+            await fileHandle.writeFile(data, 'utf-8');
+            await fileHandle.sync();
         } finally {
-            await fileHandle.close(); // Close the file
+            await fileHandle.close();
         }
     }
 
 }
-
-
 
 export default new ChunkProcessor();

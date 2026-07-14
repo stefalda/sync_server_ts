@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import * as configJson from '../../config.json';
 import { logger } from "../helpers/logger";
 import { sendPin } from "../helpers/send_email";
@@ -157,7 +157,7 @@ export class UserRepository {
      */
     private async isEmailAlreadyRegistered(realm: string, email: string): Promise<boolean> {
         const db = await this.getDB();
-        const res = await db.query("SELECT 1 FROM users WHERE email = $1", [email], { realm, singleResult: true });
+        const res = await db.query(`SELECT 1 FROM ${Tables.User} WHERE email = $1`, [email], { realm, singleResult: true });
         if (res !== null) return true;
         return false;
     }
@@ -259,11 +259,11 @@ export class UserRepository {
         // Check if the PIN is correct
         const db = await this.getDB();
         if (!registrationData.password) {
-            throw "New password is missing!";
+            throw new Error("New password is missing!");
         }
         const user = await this.getUserFromDB(realm, registrationData.email);
         if (user == null) {
-            throw "User not found!";
+            throw new Error("User not found!");
         }
         // Get the PIN from the DB
         const sql1 = `SELECT pin, created FROM ${Tables.UserPin} WHERE userid = $1`;
@@ -308,16 +308,18 @@ export class UserRepository {
         // Get the userId
         const user: User | null = await this.getUserFromDB(realm, email);
         if (!user) {
-            throw "User not found!";
+            throw new Error("User not found!");
         }
-        // Delete the PIN
-        const sql2 = `DELETE FROM ${Tables.UserPin} WHERE userid = $1`;
-        await db.query(sql2, [user.id], { realm });
-
-        // Insert the PIN
-        const pin = this.randomFixInteger(6).toString();
+        // Upsert the PIN: single atomic statement replaces DELETE+INSERT pattern.
+        // Previously two concurrent requests could both DELETE then both INSERT,
+        // with the last write silently overwriting the first. ON CONFLICT DO UPDATE
+        // ensures the operation is atomic at the database level.
+        // Also replaced Math.random() (Xorshift128+, predictable) with
+        // crypto.randomInt (cryptographically secure).
+        const pin = randomInt(100000, 999999).toString();
         const create = (new Date()).getTime();
-        const sql3 = `INSERT INTO ${Tables.UserPin} (userid, pin, created) VALUES ($1, $2, $3)`;
+        const sql3 = `INSERT INTO ${Tables.UserPin} (userid, pin, created) VALUES ($1, $2, $3)
+            ON CONFLICT (userid) DO UPDATE SET pin = EXCLUDED.pin, created = EXCLUDED.created`;
         await db.query(sql3, [user.id, pin, create], { realm });
         // Extract the App Name from the config json file
         const appName = (configJson.email.apps as any)[realm.toLowerCase()];
@@ -326,6 +328,8 @@ export class UserRepository {
     }
 
     private randomFixInteger(length: number) {
-        return Math.floor(Math.pow(10, length - 1) + Math.random() * (Math.pow(10, length) - Math.pow(10, length - 1) - 1));
+        const min = Math.pow(10, length - 1);
+        const max = Math.pow(10, length) - 1;
+        return randomInt(min, max);
     }
 }

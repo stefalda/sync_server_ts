@@ -20,9 +20,10 @@ export const logger = winston.createLogger({
     format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.printf(({ timestamp, level, message, stack }) => {
-            // If stack exists (when logging an error), print it; otherwise just log the message
+            // Previously also called console.log(msg), which caused every message
+            // to appear twice — once via console.log, once via the file transport.
+            // The file transport alone is sufficient.
             const msg = `${timestamp} [${level.toUpperCase()}]: ${stack || message}`;
-            console.log(msg);
             return msg;
         })
     )

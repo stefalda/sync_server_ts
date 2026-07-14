@@ -27,60 +27,70 @@ export class SyncRepository {
 
     }
 
-    async pull(realm: any, syncDataRequest: SyncDataRequest): Promise<SyncDataPullResponse> {
+    async pull(realm: string, syncDataRequest: SyncDataRequest): Promise<SyncDataPullResponse> {
+        const db = await this.getDB();
         // Ottieni lo userClient
         const userClient: UserClient =
             await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
         if (!userClient) {
             throw Error("Client id not found!");
         }
-        // Verifica che non ci sia un'altra sincronizzazione in corso per l'utente
-        if (await this.isAlreadySyncing(realm, userClient)) {
+        // Atomic lock acquisition with stale-lock recovery (2 min timeout).
+        // Previously used check-then-act: SELECT userClient, check syncing==null, then UPDATE.
+        // Two concurrent requests could both see syncing==null and both proceed.
+        // This single UPDATE atomically acquires the lock only when:
+        // - syncing IS NULL (no sync in progress), OR
+        // - syncing < staleThreshold (previous sync crashed and is older than 2 minutes)
+        // If rowCount === 0, the lock is held by another active sync.
+        const staleThreshold = new Date().getTime() - 120000;
+        const lockResult = await db.query(
+            `UPDATE ${Tables.UserClient} SET syncing = $1 WHERE clientid = $2 AND (syncing IS NULL OR syncing < $3)`,
+            [new Date().getTime(), syncDataRequest.clientId, staleThreshold],
+            { realm }
+        );
+        if (!lockResult || lockResult.rowCount === 0) {
             throw Error("The user is already syncing from this client");
         }
-        // Segna la sincronizzazione come attiva
-        userClient.syncing = new Date().getTime();
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
         const clientid: string = userClient.clientid!;
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const userid: string = userClient.userid!;
-
-
-        await UserRepository.getInstance().setUserClient(realm, userClient);
         const syncDataPullResponse = new SyncDataPullResponse(clientid);
         try {
-            // Cicla sui cambiamenti presenti sul server
             const serverChanges = await this.getServerChanges(realm, userid, syncDataRequest.lastSync) || [];
-            // Confronta i cambiamenti presenti sul client con quelli del server
-            // per capire se alcuni sono sorpassati e non vanno acquisiti (e viceversa)
             for (const client of syncDataRequest.changes) {
-                // Filter server data by rowguid and check the date
                 const serverData =
                     serverChanges.filter((server) => server.rowguid == client.rowguid);
                 if (serverData.length > 0) {
-                    // Only the latest value is returned for the specific id
                     const server = serverData[0];
-                    // Se il dato del server è più recente di quello sul client scarta la modifica proveniente dal client
-                    if (server.clientdate >=
-                        client.clientdate) {
+                    if (server.clientdate >= client.clientdate) {
                         syncDataPullResponse.outdatedRowsGuid.push(client.rowguid.toString());
                     } else {
-                        // Rimuovi dai cambiamenti del server quello presente dal momento che andrà sovrascritto con
-                        // quello del client (quindi non ha senso inviarlo al client)
                         serverChanges.splice(serverChanges.indexOf(server), 1);
                     }
                 }
             }
-            // Aggiungi ai serverChanges i dati da inviare al client per il suo aggiornamento
-            // a meno che si tratti di una cancellazione
+            // Batch N+1 optimization: previously each server change called getRowDataValue()
+            // individually (N queries for N changes). Now pre-load all data rows in a single
+            // query using ANY($1), then look up from an in-memory Map.
             const finalServerChanges = [];
-            for (let i = 0; i < serverChanges.length; i++) {
-                const serverChange = serverChanges[i];
+            const nonDeleteChanges = serverChanges.filter(c => c.operation !== "D");
+            const dataByRowguid = new Map<string, string>();
+            if (nonDeleteChanges.length > 0) {
+                const guids = nonDeleteChanges.map(c => c.rowguid);
+                const dataRows = await db.query(
+                    `SELECT rowguid, json FROM ${Tables.Data} WHERE rowguid = ANY($1)`,
+                    [guids],
+                    { realm }
+                );
+                for (const row of dataRows || []) {
+                    dataByRowguid.set(row.rowguid, row.json);
+                }
+            }
+            for (const serverChange of serverChanges) {
                 if (serverChange.operation !== "D") {
-                    // Check if data is not null... (it shouldn't happen)
-                    const data = await this.getRowDataValue(realm, serverChange.rowguid);
-                    if (data && data['json']) {
-                        serverChange.rowData = data['json'];
+                    const rowData = dataByRowguid.get(serverChange.rowguid);
+                    if (rowData) {
+                        serverChange.rowData = rowData;
                     }
                 }
                 finalServerChanges.push(serverChange);
@@ -102,50 +112,80 @@ export class SyncRepository {
 
     }
 
-    async push(realm: any, syncDataRequest: SyncDataRequest): Promise<SyncDataPushResponse> {
-        // Ottieni lo userClient
+    async push(realm: string, syncDataRequest: SyncDataRequest): Promise<SyncDataPushResponse> {
+        const db = await this.getDB();
         const userClient =
             await UserRepository.getInstance().getUserClient(realm, syncDataRequest.clientId);
         if (!userClient) {
             throw Error("Client id not found!");
         }
-        // Verifica che non ci sia un'altra sincronizzazione in corso per l'utente
         if (userClient.syncing == null) {
             throw Error("You should pull before pushing...");
         }
 
+        // Use a dedicated client for the push transaction.
+        // The standard DatabaseRepository.query() releases the client to the pool after each call,
+        // which would break BEGIN/COMMIT isolation. By getting a client directly from the pool,
+        // all processData and setSyncData operations run on the same connection,
+        // ensuring atomicity: either all changes commit or none do.
+        const pool = db.getPool(realm);
+        const client = await pool.connect();
         try {
-
+            await client.query('BEGIN');
             for (const clientChange of syncDataRequest.changes) {
-                // Aggiorna i dati a partire da quanto contenuto nel campo data
-                //print(
-                //    "Table:${clientChange.tablename} Operation:${clientChange.operation} Key:${clientChange.rowguid}");
-                await this.processData(realm, clientChange);
-                // Inserisci la riga sulla tabella SyncData del server aggiungendo la data
-                //it.rowguid = UUID.fromString(it.rowguid)
+                await this.processDataWithClient(client, realm, clientChange);
                 clientChange.serverdate = new Date().getTime();
-                await this.setSyncData(realm, userClient, clientChange);
+                await this.setSyncDataWithClient(client, realm, userClient, clientChange);
             }
 
-            // Update Client Last Sync Date and delete syncing date
             userClient.lastsync = new Date().getTime();
-            // Only if the data is not partial turn off the sync in progress flag        
             if (syncDataRequest.isPartial === 0) {
                 userClient.syncing = null;
             }
             await UserRepository.getInstance().setUserClient(realm, userClient);
 
+            await client.query('COMMIT');
             return new SyncDataPushResponse(userClient.lastsync!);
         }
         catch (ex) {
+            await client.query('ROLLBACK').catch(() => {});
             logger.error(ex);
-            // Reset syncing date
             if (userClient) {
                 userClient.syncing = null;
                 await UserRepository.getInstance().setUserClient(realm, userClient);
             }
             throw ex;
+        } finally {
+            client.release();
         }
+    }
+
+    private async processDataWithClient(client: any, realm: string, syncData: SyncData): Promise<void> {
+        const jsonData = await client.query(
+            `SELECT json FROM ${Tables.Data} WHERE rowguid = $1`, [syncData.rowguid]
+        );
+        let sql: string;
+        if (jsonData.rowCount === 0) {
+            sql = `INSERT INTO ${Tables.Data} (rowguid, json) VALUES ($1, $2)`;
+        } else {
+            if (syncData.operation === "D") {
+                sql = `DELETE FROM ${Tables.Data} WHERE rowguid = $1`;
+                await client.query(sql, [syncData.rowguid]);
+                return;
+            }
+            sql = `UPDATE ${Tables.Data} SET json = $2 WHERE rowguid = $1`;
+        }
+        await client.query(sql, [syncData.rowguid, syncData.rowData]);
+    }
+
+    private async setSyncDataWithClient(client: any, realm: string, userClient: UserClient, syncData: SyncData) {
+        const sql = `INSERT INTO ${Tables.SyncData}
+            (userid, clientid, tablename, rowguid, operation, clientdate, serverdate)
+            VALUES($1, $2, $3, $4, $5, $6, $7)`;
+        await client.query(sql, [
+            userClient.userid, userClient.clientid, syncData.tablename,
+            syncData.rowguid, syncData.operation, syncData.clientdate, syncData.serverdate
+        ]);
     }
 
     /**
@@ -155,7 +195,7 @@ export class SyncRepository {
      * @param syncData 
      * @returns 
      */
-    private async setSyncData(realm: any, userClient: UserClient, syncData: SyncData) {
+    private async setSyncData(realm: string, userClient: UserClient, syncData: SyncData) {
         const sql = `INSERT INTO ${Tables.SyncData}
             (userid, clientid, tablename, rowguid, operation, clientdate, serverdate)
             VALUES( $1, $2, $3, $4, $5, $6, $7);`;
@@ -171,21 +211,6 @@ export class SyncRepository {
             ], { realm });
     }
 
-    /// Verifica se è in corso una sincronizzazione per lo stesso utente da un altro client
-    /// Se la sincronizzazione è troppo vecchia la rimuove...
-    private async isAlreadySyncing(realm: string, userClient: UserClient): Promise<boolean> {
-        if (userClient.syncing == null) return false;
-        // Verifica se la sincronizzazione dura da più di 5', nel caso annullala
-        const now = new Date();
-        const differenceInMinutes = Math.abs(now.getTime() - userClient.syncing!) / 1000 / 60;
-        if (differenceInMinutes > 2) {
-            userClient.syncing = null;
-            UserRepository.getInstance().setUserClient(realm, userClient);
-            return false;
-        }
-        return true;
-    }
-
     /**
      * Cancel current sync because some error occurred client side
      * @param realm 
@@ -193,14 +218,14 @@ export class SyncRepository {
      * @param userToken 
      * @returns 
      */
-    public async cancelSync(realm: any, clientId: string): Promise<boolean> {
+    public async cancelSync(realm: string, clientId: string): Promise<boolean> {
         const userClient: UserClient =
             await UserRepository.getInstance().getUserClient(realm, clientId);
         if (!userClient) {
             throw Error("Client id not found, cannot cancel sync!");
         }
         userClient.syncing = null;
-        UserRepository.getInstance().setUserClient(realm, userClient);
+        await UserRepository.getInstance().setUserClient(realm, userClient);
         return true;
     }
 
@@ -222,24 +247,22 @@ export class SyncRepository {
 
 
     /// Provvedi alle operazioni di inserimento, aggiornamento e cancellazione sulla tabella indicata
-    private async processData(realm: any, syncData: SyncData): Promise<void> {
-        // Read the current RowData
+    private async processData(realm: string, syncData: SyncData): Promise<void> {
         const jsonData = await this.getRowDataValue(realm, syncData.rowguid);
-        // Update/Insert the json data
         let sql;
         if (jsonData == null) {
-            // Insert
             sql = `INSERT INTO ${Tables.Data} (rowguid, json) VALUES ($1, $2)`;
         } else {
-            // Update
-            // If it's an update do nothing, so keep the last valid data
-            if (syncData.operation == "D") {
+            // Previously operation "D" (delete) just returned without deleting,
+            // so removed rows persisted in the data table forever.
+            if (syncData.operation === "D") {
+                sql = `DELETE FROM ${Tables.Data} WHERE rowguid = $1`;
+                await (await this.getDB()).query(sql, [syncData.rowguid], { realm });
                 return;
             }
             sql = `UPDATE ${Tables.Data} SET json = $2 WHERE rowguid = $1`;
         }
-        // Persist the data
-        return (await this.getDB()).query(sql, [syncData.rowguid, syncData.rowData], { realm });
+        await (await this.getDB()).query(sql, [syncData.rowguid, syncData.rowData], { realm });
     }
 
 }

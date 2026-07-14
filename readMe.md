@@ -13,10 +13,6 @@ The client-side library is available for Flutter and any of its supported platfo
 - **Password Management**: Handle password changes and forgotten password requests with PIN verification.
 - **Realms**: Support for multiple realms to handle separate user groups or apps.
 
-Here is the proofread version of your paragraph:
-
----
-
 ## Database Support
 
 The application requires a **Postgres** database to persist data. The database can be self-hosted or obtained from a cloud provider. It has been tested with both **Postgres** and **CockroachDB**.
@@ -25,10 +21,23 @@ In the root of the project, two scripts are available to create the Postgres and
 - `database_postgres_script.sql`
 - `database_cockroachdb_script.sql`
 
-## Docker installation
-The application is offered as a Docker image downloadable from here.
+## Docker
 
-If you want to self host everything you can use a docker-compose.yml file like the following:
+The application is available as a Docker image on Docker Hub:
+
+```bash
+docker pull sfalda/sync_server:latest
+```
+
+### Build Locally
+
+```bash
+docker build -t sync_server .
+```
+
+### Docker Compose
+
+To self-host the full stack (PostgreSQL + server), use a `docker-compose.yml` like the following:
 
 ```yaml
 services:
@@ -191,6 +200,12 @@ services:
 
 ```json
 {
+    "server": {
+        "port": 8076,
+        "authentication": "jwt",
+        "secret_key": "JWT_SECRET_KEY",
+        "secret_key_refresh": "JWT_SECRET_KEY2"
+    },
     "db": {
         "realms": {
             "default": "postgresql://postgres:postgress@localhost:5433/postgres",
@@ -208,9 +223,9 @@ services:
         "apps": {
             "memento": "Memento",
             "default": "Sync Server App",
-            "todos": "ToDos App"
+            "todos": "ToDos App",
             "todo_test": "ToDos Test App"
-         }
+        }
     }
 }
 ```
@@ -220,9 +235,72 @@ services:
    npm start
    ```
 
+## Testing
+
+Tests use **Vitest** with a real PostgreSQL test database. The test infrastructure includes integration tests (against a real database) and unit tests (for pure logic like password hashing).
+
+### Prerequisites
+
+- A running PostgreSQL instance (Docker command below)
+- Create the test database:
+  ```bash
+  docker run -d --name sync-server-test-db \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_PASSWORD=postgress \
+    -e POSTGRES_DB=sync_server_test \
+    -p 5433:5432 \
+    postgres:alpine3.20
+  ```
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (re-run on file changes)
+npm run test:watch
+```
+
+The test configuration uses `config.test.json` (loaded automatically via Vitest aliases when `NODE_ENV=test`). The production `config.json` is never modified.
+
+### Test Structure
+
+Tests mirror the `src/` directory structure under `test/`:
+
+| Directory | Tests |
+|-----------|-------|
+| `test/helpers/` | Email client, logger, config |
+| `test/middleware/` | Authorization middleware |
+| `test/repositories/` | Database, sync, user, auth, chunk processor |
+| `test/routes/` | API endpoints, sync routes, password flow |
+
+The database schema is provisioned automatically before each test run via `test/globalSetup.ts`. Each test suite cleans up after itself using `test/fixtures.ts` helpers.
+
+## CI Pipeline
+
+The project uses **GitHub Actions** for continuous integration. The CI workflow:
+
+1. **Spins up a PostgreSQL service** (same `postgres:alpine3.20` image) using GitHub Actions service containers.
+2. **Installs dependencies** (`npm ci`).
+3. **Runs linting** (`npm run lint`).
+4. **Runs the full test suite** (`npm test`) against the service container database.
+5. **Builds the project** (`npm run build`).
+
+The CI configuration is at `.github/workflows/`. Tests run in parallel across multiple Node.js versions if configured.
+
+## Health Check
+
+A `GET /healthz` endpoint returns `{ "status": "ok" }` with HTTP 200, useful for container orchestrators and load balancers.
+
 ## Authentication
 
-This server uses token-based authentication. After logging in via the `/login/:realm` endpoint, a JWT (JSON Web Token) is returned, which must be included in the `Authorization` header (`Bearer <token>`) for any subsequent requests that require authentication (e.g., `/pull`, `/push`).
+The server supports two authentication modes, configured via `server.authentication` in `config.json`:
+
+- **`"jwt"`** (default): Returns a JWT access token (24h expiry) and a refresh token (7d expiry). Tokens are signed with `secret_key` and `secret_key_refresh` respectively.
+- **`"token"`**: Returns a UUID-based access token and refresh token stored in the database.
+
+After logging in via the `/login/:realm` endpoint, include the token in the `Authorization` header (`Bearer <token>`) for authenticated requests (e.g., `/pull`, `/push`).
 
 ## Error Handling
 

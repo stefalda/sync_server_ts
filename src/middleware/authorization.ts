@@ -26,7 +26,10 @@ const checkSimpleToken = async (req: Request, res: Response, next: NextFunction)
     try {
 
         let token = req.headers['authorization'] as string;
-        if (!token) {
+        // Previously only checked truthiness, then called token.substring(7).
+        // A Basic-auth header like "Basic xyz" would extract garbage " xyz" as the token.
+        // Now validates the Bearer prefix explicitly, matching checkJWTToken behavior.
+        if (!token || !token.startsWith("Bearer ")) {
             return res.status(401).json(new ApiResult(401, "Missing bearer token"));
         }
         // Extract the authentication token
@@ -41,13 +44,16 @@ const checkSimpleToken = async (req: Request, res: Response, next: NextFunction)
             return res.status(403).json(new ApiResult(403, "Wrong token"));
         }
         // Token expired
+        if (userToken.lastrefresh == null) {
+            return res.status(400).json(new ApiResult(400, "Token has expired"));
+        }
         const now = new Date();
-        const differenceInHours = Math.abs(now.getTime() - userToken.lastrefresh!) / 36e5; //60*60*1000
+        const differenceInHours = Math.abs(now.getTime() - userToken.lastrefresh) / 36e5; //60*60*1000
         if (differenceInHours > 24) {
             return res.status(400).json(new ApiResult(400, "Token has expired"));
         }
         // Add the userToken to the request
-        (req as any).userToken = userToken;
+        req.userToken = userToken;
         // Can access...
         next();
     } catch (error) {
@@ -78,22 +84,23 @@ const checkJWTToken = async (req: Request, res: Response, next: NextFunction) =>
         // Extract the token (removing "Bearer " prefix)
         token = token.substring(7).trim();
 
-        // Verify JWT token
+        // Verify JWT token synchronously (previously used callback pattern:
+        // jwt.verify(token, key, callback) — the callback set res.statusCode asynchronously,
+        // and the code below checked res.statusCode before the callback ran, creating a race.
+        // Synchronous jwt.verify(token, key) returns decoded or throws, no race possible.)
         const jwt = require('jsonwebtoken');
-        jwt.verify(token, configJson.server.secret_key, (err, decoded) => {
-            if (err) {
-                return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
-            }
+        try {
+            const decoded = jwt.verify(token, configJson.server.secret_key);
+            req.user = decoded as any;
+        } catch {
+            return res.status(403).json(new ApiResult(403, "Invalid or expired token"));
+        }
 
-            // Attach the decoded payload to the request
-            (req as any).user = decoded; // You may define an interface for req.user
-
-            next(); // Proceed to the next middleware
-        });
+        next();
 
     } catch (error) {
         logger.error(error);
-        return res.status(500).json({ error: `Authentication error: ${error.message}` });
+        return res.status(500).json({ error: `Authentication error` });
     }
 };
 
@@ -112,7 +119,7 @@ export const checkToken = useJWT ? checkJWTToken : checkSimpleToken;
  * @returns 
  */
 export const checkBasicAuthentication =
-    async (req: Request, res: Response, next: any) => {
+    async (req: Request, res: Response, next: NextFunction) => {
         try {
             const authorization = req.headers['authorization'] as string;
             if (!authorization) {
@@ -131,7 +138,7 @@ export const checkBasicAuthentication =
             if (!user) {
                 return res.status(403).json(new ApiResult(403, "Wrong username or password"));
             }
-            (req as any).user = user;
+            req.user = user;
             // Can access...
             next();
         } catch (error) {
@@ -147,7 +154,7 @@ export const checkBasicAuthentication =
  * @returns 
  */
 export function
-    generateJWTToken(userId: string, email: string): String {
+    generateJWTToken(userId: string, email: string): string {
     const jwt = require('jsonwebtoken');
     return jwt.sign(
         { userid: userId, email, iat: Date.now() },
@@ -157,7 +164,7 @@ export function
 }
 
 export function
-    generateRefreshJWTToken(userId: string, email: string): String {
+    generateRefreshJWTToken(userId: string, email: string): string {
     const jwt = require('jsonwebtoken');
     return jwt.sign(
         { userid: userId, email },

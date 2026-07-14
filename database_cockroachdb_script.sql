@@ -192,7 +192,7 @@ CREATE TABLE public.users (
 	password VARCHAR(255) NOT NULL,
 	salt VARCHAR(255) NOT NULL,
 	language CHAR(2) NULL,
-	CONSTRAINT users_pkey PRIMARY KEY (id ASC)
+	CONSTRAINT users_pkey PRIMARY KEY (userid ASC)
 );
 
 CREATE UNIQUE INDEX users_email_idx ON public."users" (email);

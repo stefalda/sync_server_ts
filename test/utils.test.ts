@@ -1,18 +1,31 @@
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import { encryptPassword } from '../src/helpers/utils';
-import { DatabaseRepository } from '../src/repositories/database_repository';
 
-describe('Spec 0002 — Password & PIN Security (utils)', () => {
-  beforeAll(() => {
-    DatabaseRepository.reset();
+describe('Spec 0002 — H5: Password hashing with scrypt', () => {
+  test('encryptPassword produces a hex string', () => {
+    const result = encryptPassword('testPass123', 'somesalt');
+    // scryptSync produces a buffer, toString('hex') gives a hex string
+    expect(result).toBeTruthy();
+    expect(typeof result).toBe('string');
+    // scrypt with keylen 64 produces 128 hex chars (64 bytes × 2)
+    expect(result).toHaveLength(128);
   });
 
-  afterAll(() => {
-    DatabaseRepository.reset();
+  test('encryptPassword produces consistent output for same password and salt', () => {
+    const result1 = encryptPassword('testPass123', 'somesalt');
+    const result2 = encryptPassword('testPass123', 'somesalt');
+    expect(result1).toBe(result2);
   });
 
-  test.todo('encryptPassword uses scrypt or bcrypt instead of SHA-512');
-  test.todo('encryptPassword returns a hex string');
-  test.todo('encryptPassword produces different output for different salts');
-  test.todo('encryptPassword with same password and salt produces consistent output');
+  test('encryptPassword produces different output for different salts', () => {
+    const result1 = encryptPassword('testPass123', 'salt1');
+    const result2 = encryptPassword('testPass123', 'salt2');
+    expect(result1).not.toBe(result2);
+  });
+
+  test('encryptPassword produces different output for different passwords', () => {
+    const result1 = encryptPassword('password1', 'somesalt');
+    const result2 = encryptPassword('password2', 'somesalt');
+    expect(result1).not.toBe(result2);
+  });
 });

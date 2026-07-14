@@ -3,7 +3,7 @@ import * as handlebars from 'handlebars';
 import * as nodemailer from 'nodemailer';
 import * as Mail from 'nodemailer/lib/mailer';
 import * as configJson from '../../config.json';
-// https://blog.tericcabrel.com/send-email-nodejs-handlebars-amazon-ses/
+
 type EmailClientArgs<TemplateData> = {
     to: string;
     subject: string;
@@ -11,16 +11,21 @@ type EmailClientArgs<TemplateData> = {
     templateData: TemplateData;
 };
 
-const sendMail = async <TemplateData>(data: EmailClientArgs<TemplateData>) => {
-    const fromName = configJson.email.from;
-    const fromEmailAddress = configJson.email.fromEmail;
-    const smtpHost = configJson.email.smtp ?? '';
-    const smtpPort = parseInt(configJson.email.port ?? '587', 10);
-    const smtpUser = configJson.email.username ?? '';
-    const smtpPassword = configJson.email.password ?? '';
+// Module-level SMTP transport singleton: created once, reused across calls.
+// Previously a new transport (TCP + TLS handshake) was created per email,
+// adding 100-500ms overhead each time.
+const fromName = configJson.email.from;
+const fromEmailAddress = configJson.email.fromEmail;
+const smtpHost = configJson.email.smtp ?? '';
+const smtpPort = parseInt(configJson.email.port ?? '587', 10);
+const smtpUser = configJson.email.username ?? '';
+const smtpPassword = configJson.email.password ?? '';
 
-    try {
-        const smtpTransport: Mail = nodemailer.createTransport({
+let transport: Mail | null = null;
+
+function getTransport(): Mail {
+    if (!transport) {
+        transport = nodemailer.createTransport({
             host: smtpHost,
             port: smtpPort,
             auth: {
@@ -28,24 +33,46 @@ const sendMail = async <TemplateData>(data: EmailClientArgs<TemplateData>) => {
                 pass: smtpPassword,
             },
         });
-
-        const source = fs.readFileSync(data.templatePath, { encoding: 'utf-8' });
-        const template: HandlebarsTemplateDelegate<TemplateData> = handlebars.compile(source);
-        const html: string = template(data.templateData);
-
-        const updatedData: Mail.Options = {
-            to: data.to,
-            html,
-            from: `${fromName} <${fromEmailAddress}>`,
-            subject: data.subject,
-        };
-
-        smtpTransport.sendMail(updatedData).then((result: nodemailer.SentMessageInfo): void => {
-            console.info(result);
-        });
-    } catch (e) {
-        console.error(e);
     }
+    return transport;
+}
+
+// Template cache: compiled Handlebars templates keyed by file path.
+// Prevents repeated readFileSync + compile calls for the same template.
+const templateCache = new Map<string, HandlebarsTemplateDelegate<unknown>>();
+
+function getTemplate<TemplateData>(templatePath: string): HandlebarsTemplateDelegate<TemplateData> {
+    let template = templateCache.get(templatePath);
+    if (!template) {
+        const source = fs.readFileSync(templatePath, { encoding: 'utf-8' });
+        template = handlebars.compile(source);
+        templateCache.set(templatePath, template);
+    }
+    return template as HandlebarsTemplateDelegate<TemplateData>;
+}
+
+const sendMail = async <TemplateData>(data: EmailClientArgs<TemplateData>) => {
+    // Outer try/catch removed — let errors propagate to caller
+    const smtpTransport = getTransport();
+    const template = getTemplate<TemplateData>(data.templatePath);
+    const html: string = template(data.templateData);
+
+    const updatedData: Mail.Options = {
+        to: data.to,
+        html,
+        from: `${fromName} <${fromEmailAddress}>`,
+        subject: data.subject,
+    };
+
+    // Previously fire-and-forget with .then(). Now awaited so errors propagate.
+    await smtpTransport.sendMail(updatedData);
 };
 
-export { sendMail };
+function closeTransport(): void {
+    if (transport) {
+        transport.close();
+        transport = null;
+    }
+}
+
+export { sendMail, closeTransport };

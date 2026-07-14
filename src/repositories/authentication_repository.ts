@@ -38,7 +38,7 @@ export class AuthenticationRepository {
     async getUserIdFromToken(realm: string, token: string): Promise<number> {
         const db = await this.getDB();
         return await db.query(`SELECT uc.userid FROM ${Tables.UserClient} uc INNER JOIN ${Tables.UserToken} ut ON 
-        uc.clientid = ut.clientid WHERE ut.token = ?`, [token], { realm: realm, singleResult: true });
+        uc.clientid = ut.clientid WHERE ut.token = $1`, [token], { realm: realm, singleResult: true });
     }
 
     async updateToken(realm: string, userToken: UserToken) {
