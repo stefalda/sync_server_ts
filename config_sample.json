@@ -7,7 +7,14 @@
     },
     "db": {
         "realms": {
-            "default": "postgresql://"
+            "default": {
+                "connectionString": "postgresql://user:password@localhost:5432/dbname",
+                "pool": {
+                    "max": 20,
+                    "idleTimeoutMillis": 30000,
+                    "connectionTimeoutMillis": 2000
+                }
+            }
         }
     },
     "email": {

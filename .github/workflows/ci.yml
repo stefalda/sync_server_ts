@@ -35,6 +35,11 @@ jobs:
 
       - run: npm ci
 
+      # config.json is gitignored; create it from sample so module imports don't fail.
+      # Tests use config.test.json via Vitest aliases, but source-level imports at module
+      # load time (e.g. authorization.ts: `export const useJWT = ...`) need the file to exist.
+      - run: cp config_sample.json config.json
+
       - run: npm run lint
         continue-on-error: true
 

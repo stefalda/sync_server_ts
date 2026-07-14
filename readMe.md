@@ -208,9 +208,22 @@ services:
     },
     "db": {
         "realms": {
-            "default": "postgresql://postgres:postgress@localhost:5433/postgres",
-            "todos": "postgresql://postgres:postgress@localhost:5433/postgres",
-            "todo_test": "postgresql://postgres:postgress@localhost:5433/postgres"
+            "default": {
+                "connectionString": "postgresql://postgres:postgress@localhost:5433/postgres",
+                "pool": {
+                    "max": 20,
+                    "idleTimeoutMillis": 30000,
+                    "connectionTimeoutMillis": 2000
+                }
+            },
+            "todos": {
+                "connectionString": "postgresql://postgres:postgress@localhost:5433/postgres",
+                "pool": {
+                    "max": 10,
+                    "idleTimeoutMillis": 30000,
+                    "connectionTimeoutMillis": 2000
+                }
+            }
         }
     },
     "email": {
@@ -223,8 +236,7 @@ services:
         "apps": {
             "memento": "Memento",
             "default": "Sync Server App",
-            "todos": "ToDos App",
-            "todo_test": "ToDos Test App"
+            "todos": "ToDos App"
         }
     }
 }
