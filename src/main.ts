@@ -20,20 +20,25 @@ function wrapAsync(fn: Function) {
     };
 }
 
+// Rate limiters. Set RATE_LIMIT_DISABLE=1 to bypass limits (e.g. for stress tests).
+const rateLimitEnabled = process.env.RATE_LIMIT_DISABLE !== '1';
+
 const authLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 10,
+    max: rateLimitEnabled ? 10 : 0,
     message: { error: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: () => !rateLimitEnabled,
 });
 
 const syncLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 30,
+    max: rateLimitEnabled ? 30 : 0,
     message: { error: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: () => !rateLimitEnabled,
 });
 
 // Factory function for testability: returns the configured Express app without starting it.

@@ -249,6 +249,14 @@ services:
    npm start
    ```
 
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | HTTP server port |
+| `TEMP_UPLOADS` | `./temp_uploads` | Directory for chunk upload temp files |
+| `RATE_LIMIT_DISABLE` | unset | Set to `1` to bypass rate limiting (for stress testing) |
+
 ## Testing
 
 Tests use **Vitest** with a real PostgreSQL test database. The test infrastructure includes integration tests (against a real database) and unit tests (for pure logic like password hashing).
