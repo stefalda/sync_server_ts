@@ -1,5 +1,7 @@
 # Sync Server (sync_server_ts)
 
+![CI](https://github.com/stefalda/sync_server_ts/actions/workflows/ci.yml/badge.svg)
+
 The **Sync Server** is a Node.js/Express-based server designed to handle user authentication, client registration, and data synchronization across multiple platforms. This server works alongside a client-side library to ensure secure and consistent data synchronization, providing support for realms to separate different user groups or applications.
 
 The client-side library is available for Flutter and any of its supported platforms (iOS, Android, Web, Windows, MacOS, Linux):
