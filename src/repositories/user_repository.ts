@@ -86,6 +86,7 @@ export class UserRepository {
     * @returns 
     */
     async register(realm: string, registrationData: RegistrationData): Promise<ApiResult | RegistrationResult> {
+        const db = await this.getDB();
         const emailAlreadyRegistered = await this.isEmailAlreadyRegistered(realm, registrationData.email.toLowerCase());
         // New registration but email is already registered
         if (emailAlreadyRegistered && registrationData.newRegistration) {
@@ -109,6 +110,16 @@ export class UserRepository {
             }
             // Assing the name
             registrationData.name = user.name!;
+            // Se l'utente non ha una lingua salvata, la prendiamo dal dispositivo che
+            // si registra (le email — es. PIN di reset — seguiranno quella lingua).
+            if (!user.language) {
+                const language = (registrationData.language || 'en').toLowerCase();
+                await db.query(
+                    `UPDATE ${Tables.User} SET language = $1 WHERE id = $2`,
+                    [language, user.id],
+                    { realm });
+                user.language = language;
+            }
         } else {
             // Register a new user
             user = new User()

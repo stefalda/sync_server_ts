@@ -12,9 +12,10 @@ export async function sendPin(name: string, email: string, app: string, pin: str
         app,
         pin
     };
-    const template = (language.toLowerCase()) == "it" ? "change_password_it" : "change_password";
+    const isItalian = (language ?? '').toLowerCase().startsWith('it');
+    const template = isItalian ? "change_password_it" : "change_password";
     await sendMail<ConfirmEmailPayload>({
-        subject: 'Change password',
+        subject: isItalian ? 'Modifica password' : 'Change password',
         templateData,
         templatePath: resolveTemplatePath(`${template}.html`),
         to: email,
