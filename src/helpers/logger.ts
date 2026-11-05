@@ -2,6 +2,9 @@ const winston = require('winston');
 require('winston-daily-rotate-file');
 import * as path from 'path';
 
+// I log finiscono su file (se la directory esiste) e su stdout, così `docker logs` funziona.
+const consoleTransport = new winston.transports.Console();
+
 // Create a single transport for all log levels
 const transport = new winston.transports.DailyRotateFile({
     filename: path.join(__dirname, '../..', 'logs') + '/application-%DATE%.log',  // Single file for all logs
@@ -15,6 +18,7 @@ const transport = new winston.transports.DailyRotateFile({
 export const logger = winston.createLogger({
     level: 'debug',  // Minimum log level to log
     transports: [
+        consoleTransport,
         transport
     ],
     format: winston.format.combine(

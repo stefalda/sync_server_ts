@@ -47,6 +47,10 @@ const syncLimiter = rateLimit({
 // start a server on port 3000 as a side effect.
 export function createApp() {
     const app = express();
+    // Dietro Traefik + Cloudflare Tunnel: senza questo, express-rate-limit non riesce a
+    // identificare il client (X-Forwarded-For) e lancia ERR_ERL_UNEXPECTED_X_FORWARDED_FOR,
+    // lasciando di fatto i limiti non applicati. 1 = primo proxy fidato.
+    app.set('trust proxy', 1);
     app.use(cors());
 
     // Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
