@@ -29,6 +29,9 @@ function getTransport(): Mail {
         transport = nodemailer.createTransport({
             host: smtpHost,
             port: smtpPort,
+            // 465 = TLS implicito; 587 (Gmail/SES) = STARTTLS obbligatorio.
+            secure: smtpPort === 465,
+            requireTLS: smtpPort === 587,
             auth: {
                 user: smtpUser,
                 pass: smtpPassword,
