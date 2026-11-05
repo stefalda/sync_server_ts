@@ -1,5 +1,4 @@
-import * as path from 'node:path';
-import { sendMail } from "./email_client";
+import { sendMail, resolveTemplatePath } from "./email_client";
 
 type ConfirmEmailPayload = {
     name: string;
@@ -17,7 +16,7 @@ export async function sendPin(name: string, email: string, app: string, pin: str
     await sendMail<ConfirmEmailPayload>({
         subject: 'Change password',
         templateData,
-        templatePath: path.join(__dirname, `./../email-template/${template}.html`),
+        templatePath: resolveTemplatePath(`${template}.html`),
         to: email,
     });
 }

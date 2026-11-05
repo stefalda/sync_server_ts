@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import * as handlebars from 'handlebars';
 import * as nodemailer from 'nodemailer';
 import * as Mail from 'nodemailer/lib/mailer';
@@ -35,6 +36,31 @@ function getTransport(): Mail {
         });
     }
     return transport;
+}
+
+/**
+ * Risolve il percorso di un template.
+ *
+ * In sviluppo i file stanno in `src/email-template`; nella build finiscono in `dist/src/...`
+ * ma **la cartella dei template non viene copiata sotto dist**, quindi il vecchio
+ * `path.join(__dirname, '../email-template/...')` puntava a `dist/src/email-template`
+ * e ogni invio falliva con ENOENT (PIN di reset mai recapitato in produzione).
+ *
+ * Ordine: `EMAIL_TEMPLATE_DIR`, poi i percorsi noti (build e sorgente), infine `cwd`.
+ */
+function resolveTemplatePath(fileName: string): string {
+    const candidates = [
+        process.env.EMAIL_TEMPLATE_DIR
+            ? path.join(process.env.EMAIL_TEMPLATE_DIR, fileName)
+            : null,
+        path.join(__dirname, '../../../src/email-template', fileName), // dist/src/helpers → /app/src/email-template
+        path.join(__dirname, '../../email-template', fileName),
+        path.join(process.cwd(), 'src/email-template', fileName),
+    ].filter((c): c is string => !!c);
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    return candidates[0];
 }
 
 // Template cache: compiled Handlebars templates keyed by file path.
@@ -75,4 +101,4 @@ function closeTransport(): void {
     }
 }
 
-export { sendMail, closeTransport };
+export { sendMail, closeTransport, resolveTemplatePath };
